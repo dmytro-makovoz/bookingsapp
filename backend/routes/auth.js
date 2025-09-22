@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
-const { protect } = require('../middleware/auth');
+const protect = require('../middleware/auth');
 
 const router = express.Router();
 

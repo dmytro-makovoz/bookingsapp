@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
+import { showInfoToast } from '../utils/toast';
 import { logout } from '../store/slices/authSlice';
 
 const Dashboard = () => {
@@ -16,6 +17,7 @@ const Dashboard = () => {
   }, [user, navigate]);
 
   const handleLogout = () => {
+    showInfoToast('👋 You have been logged out successfully.');
     dispatch(logout());
     navigate('/login');
   };

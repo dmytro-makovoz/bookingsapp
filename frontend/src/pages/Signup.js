@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
+import { showErrorToast, showSignupSuccessToast } from '../utils/toast';
 import { register as registerUser, reset } from '../store/slices/authSlice';
 
 // Validation schema
@@ -19,7 +20,7 @@ const schema = yup.object({
     .required('Email is required'),
   password: yup
     .string()
-    .min(6, 'Password must be at least 6 characters')
+    .min(8, 'Password must be at least 8 characters')
     .matches(
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
       'Password must contain at least one lowercase letter, one uppercase letter, and one number'
@@ -31,7 +32,7 @@ const schema = yup.object({
     .required('Please confirm your password'),
 });
 
-const Signup = () => {
+export default function Signup () {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
@@ -52,10 +53,11 @@ const Signup = () => {
 
   useEffect(() => {
     if (isError) {
-      // Error will be displayed in the form
+      showErrorToast(message);
     }
 
-    if (isSuccess || user) {
+    if (isSuccess && user) {
+      showSignupSuccessToast(user.name);
       navigate('/dashboard');
     }
 
@@ -103,30 +105,6 @@ const Signup = () => {
 
         {/* Form */}
         <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
-          {/* Display error message */}
-          {isError && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg
-                    className="h-5 w-5 text-red-400"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-red-800">{message}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
           <div className="space-y-4">
             {/* Name */}
             <div>
@@ -265,7 +243,7 @@ const Signup = () => {
           <div className="text-xs text-gray-600">
             <p className="mb-1">Password must contain:</p>
             <ul className="list-disc list-inside space-y-1">
-              <li>At least 6 characters</li>
+              <li>At least 8 characters</li>
               <li>One lowercase letter</li>
               <li>One uppercase letter</li>
               <li>One number</li>

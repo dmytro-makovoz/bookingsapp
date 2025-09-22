@@ -8,15 +8,30 @@ dotenv.config();
 
 // Import routes
 const authRoutes = require('./routes/auth');
+const customerRoutes = require('./routes/customers');
+const magazineRoutes = require('./routes/magazines');
+const contentSizeRoutes = require('./routes/contentSizes');
+const bookingRoutes = require('./routes/bookings');
+const leafletDeliveryRoutes = require('./routes/leafletDelivery');
+const dashboardRoutes = require('./routes/dashboard');
 
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
 app.use(express.json());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/magazines', magazineRoutes);
+app.use('/api/content-sizes', contentSizeRoutes);
+app.use('/api/bookings', bookingRoutes);
+app.use('/api/leaflet-delivery', leafletDeliveryRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Test route
 app.get('/api/test', (req, res) => {

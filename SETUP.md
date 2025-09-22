@@ -1,267 +1,301 @@
-# Bookings App Setup Guide
+# Magazine Booking System - Setup Guide
 
-This guide will help you set up and run the full-stack bookings application with authentication.
+This is a complete web-based magazine advertising booking system built with React and Node.js. The system handles customer management, magazine publications, content sizing, booking creation, and comprehensive reporting.
 
-## Prerequisites
+## Features
 
-Before you begin, ensure you have the following installed:
+### Core Functionality
+- **Customer Management**: Add, edit, and manage customer database with business categories and booking notes
+- **Magazine Management**: Set up magazines with multiple issues, start dates, and page counts  
+- **Content Size Management**: Define advertising sizes with magazine-specific pricing
+- **Booking System**: Create bookings with multi-magazine support, discounts, and scheduling
+- **Leaflet Delivery**: Separate booking system for leaflet delivery services
+- **Dashboard Analytics**: Visual charts and statistics showing revenue, content breakdown, and performance
 
-- **Node.js** (v16 or higher) - [Download](https://nodejs.org/)
-- **MongoDB** (v4.4 or higher) - [Download](https://www.mongodb.com/try/download/community) or use [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
-- **Git** - [Download](https://git-scm.com/)
+### Views and Reports
+1. **Dashboard**: Overview with pie charts showing current issue space allocation
+2. **Customer View**: Individual customer booking summaries and total values
+3. **Publications View**: Revenue breakdown by magazine and content type
+4. **Full Reports**: Filterable and exportable booking reports
+5. **Current Issue View**: Real-time space allocation with percentage breakdowns
 
-## Project Structure
+## System Requirements
 
-```
-bookingsapp/
-├── frontend/           # React frontend
-├── backend/           # Node.js backend
-├── package.json       # Root package.json for scripts
-├── README.md
-└── SETUP.md
-```
+- Node.js 16+ 
+- MongoDB 4.4+
+- React 18+
+- Modern web browser
 
-## Quick Start
+## Installation
 
 ### 1. Clone and Install Dependencies
 
 ```bash
-# Install root dependencies
+# Install backend dependencies
+cd backend
 npm install
 
-# Install all dependencies (frontend + backend)
-npm run install-all
+# Install frontend dependencies  
+cd ../frontend
+npm install
 ```
 
-### 2. Set up MongoDB
+### 2. Environment Configuration
 
-**Option A: Local MongoDB**
-- Install MongoDB locally
-- Start MongoDB service
-- Database will be automatically created at: `mongodb://localhost:27017/bookingsapp`
+Create a `.env` file in the backend directory:
 
-**Option B: MongoDB Atlas (Cloud)**
-- Create a free account at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
-- Create a new cluster
-- Get your connection string
-
-### 3. Configure Backend Environment
-
-Create a `.env` file in the `backend/` directory:
-
-```bash
-# backend/.env
-NODE_ENV=development
+```env
 PORT=5000
 MONGODB_URI=mongodb://localhost:27017/bookingsapp
-JWT_SECRET=your_jwt_secret_key_change_this_in_production
-JWT_EXPIRE=30d
+JWT_SECRET=your-super-secret-jwt-key-here
+FRONTEND_URL=http://localhost:3000
 
-# Email configuration (optional for development)
-EMAIL_FROM=noreply@bookingsapp.com
+# Email configuration (optional - for password reset)
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
-# EMAIL_USER=your_email@gmail.com
-# EMAIL_PASS=your_email_password_or_app_password
-
-# Frontend URL for password reset links
-FRONTEND_URL=http://localhost:3000
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-password
 ```
 
-**Important Notes:**
-- Replace `your_jwt_secret_key_change_this_in_production` with a secure random string
-- For production, use a strong JWT secret (32+ characters)
-- Email configuration is optional for development (forgot password will work without it)
+### 3. Database Setup
+
+Start MongoDB and the database will be created automatically when you first run the application.
 
 ### 4. Start the Application
 
 ```bash
-# Start both frontend and backend simultaneously
+# Start backend (from backend directory)
 npm run dev
+
+# Start frontend (from frontend directory) 
+npm start
 ```
 
-This will start:
-- Backend server on `http://localhost:5000`
-- Frontend React app on `http://localhost:3000`
+The application will be available at:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:5000
 
-## Individual Server Commands
+## Initial Setup Workflow
 
-If you prefer to run servers separately:
+### 1. Create Account
+- Navigate to http://localhost:3000
+- Click "Sign Up" to create your first account
+- Log in with your credentials
 
-```bash
-# Start backend only
-npm run server
+### 2. Set Up Base Data
 
-# Start frontend only (in another terminal)
-npm run client
-```
+#### Add Customers
+1. Go to "Customers" in the navigation
+2. Click "Add Customer"
+3. Enter customer details:
+   - Name (e.g., "JP Plumbing")
+   - Business Category (e.g., "Plumbing and Heating Services")  
+   - Booking Notes (optional, e.g., "Must go in first 11 pages")
 
-## Features Implemented
+#### Add Magazines
+1. Go to "Magazines" in the navigation
+2. Click "Add Magazine"
+3. Set up magazine with issues:
+   - Magazine name (e.g., "Southampton Magazine")
+   - Issues with names, page counts, and start dates:
+     - Nov25, 40 pages, start date: 2025-09-01
+     - Dec25, 36 pages, start date: 2025-10-01
+     - Jan26, 40 pages, start date: 2025-11-01
 
-### Authentication System
-✅ **User Registration (Signup)**
-- Name, email, password validation
-- Password strength requirements (6+ chars, uppercase, lowercase, number)
-- Password confirmation
-- Secure password hashing with bcrypt
+#### Add Content Sizes
+1. Go to "Content Sizes"
+2. Create different ad sizes:
+   - Quarter Page: 0.25 pages, £50 for Southampton, £45 for Winchester
+   - Half Page: 0.5 pages, £90 for Southampton, £85 for Winchester  
+   - Full Page: 1.0 pages, £160 for Southampton, £150 for Winchester
 
-✅ **User Login**
-- Email and password validation
-- JWT token generation
-- Persistent login state
+### 3. Create Bookings
 
-✅ **Forgot Password**
-- Email validation
-- Reset token generation
-- Email sending (when configured)
-- Development mode shows reset URL in response
+1. Go to "New Booking"
+2. Fill out booking form:
+   - Select customer
+   - Choose content size (pricing updates automatically)
+   - Select magazine(s) - supports multiple selection
+   - Choose content type (Advert, Article, Puzzle, etc.)
+   - Set first and last issue (or mark as ongoing)
+   - Apply discounts if needed
+   - Add optional notes
 
-✅ **Reset Password**
-- Token validation
-- New password requirements
-- Automatic login after reset
+### 4. View Analytics
 
-✅ **Form Validation**
-- Client-side validation with React Hook Form + Yup
-- Server-side validation with express-validator
-- Real-time error feedback
+#### Dashboard
+- Overview statistics (customers, magazines, bookings, revenue)
+- Current issue breakdown with pie chart
+- Publications revenue comparison
+- Quick action buttons
 
-✅ **Responsive Design**
-- Mobile-first design with Tailwind CSS
-- Works on all screen sizes
-- Modern, clean UI
+#### Current Issue Analysis
+- Select a magazine to see current/next issue
+- Pie chart showing content type allocation
+- Percentage breakdown of booked vs available space
+- Real-time space utilization
+
+#### Reports
+- Filter by magazine, issue, customer, content type
+- Export data to CSV/Excel
+- Detailed booking information
+- Financial summaries
+
+## Key Concepts
+
+### Multi-Magazine Bookings
+- Single booking can span multiple magazines
+- Each magazine can have different pricing for same content size
+- Useful for customers wanting presence across publications
+
+### Issue Scheduling
+- Start dates determine when issues become "current"
+- Bookings can span multiple issues or be ongoing
+- System automatically calculates which bookings apply to current issue
+
+### Pricing and Discounts
+- Base price calculated from content size + magazine combination
+- Percentage discounts (e.g., 10% off)
+- Fixed value discounts (e.g., £20 off)
+- Additional charges for special placement
+- Net value calculated automatically
+
+### Content Types
+- Advert: Paid advertising space
+- Article: Editorial content  
+- Puzzle: Games/entertainment content
+- Advertorial: Paid content that looks editorial
+- Front Cover: Premium placement
+- In-house: Internal company content
+
+### Leaflet Delivery
+- Separate booking system for leaflet insertion
+- Uses same customer and magazine data
+- Tracks quantity and description
+- Independent pricing and discount system
 
 ## API Endpoints
 
-### Authentication Routes (`/api/auth`)
+### Authentication
+- POST `/api/auth/login` - User login
+- POST `/api/auth/register` - User registration  
+- POST `/api/auth/forgot-password` - Password reset request
+- POST `/api/auth/reset-password/:token` - Reset password with token
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/signup` | Register new user |
-| POST | `/login` | Login user |
-| POST | `/forgot-password` | Request password reset |
-| PUT | `/reset-password/:token` | Reset password with token |
-| GET | `/me` | Get current user info |
+### Customers
+- GET `/api/customers` - List all customers
+- POST `/api/customers` - Create customer
+- PUT `/api/customers/:id` - Update customer
+- DELETE `/api/customers/:id` - Delete customer
+- GET `/api/customers/search/:query` - Search customers
 
-## Frontend Routes
+### Magazines  
+- GET `/api/magazines` - List all magazines
+- POST `/api/magazines` - Create magazine with issues
+- PUT `/api/magazines/:id` - Update magazine
+- DELETE `/api/magazines/:id` - Delete magazine
+- GET `/api/magazines/current-issue/:id` - Get current issue info
 
-| Route | Description |
-|-------|-------------|
-| `/` | Redirects to login |
-| `/login` | Login page |
-| `/signup` | Registration page |
-| `/forgot-password` | Forgot password page |
-| `/reset-password/:token` | Reset password page |
-| `/dashboard` | Protected dashboard |
+### Content Sizes
+- GET `/api/content-sizes` - List all content sizes with pricing
+- POST `/api/content-sizes` - Create content size
+- PUT `/api/content-sizes/:id` - Update content size
+- DELETE `/api/content-sizes/:id` - Delete content size
+- GET `/api/content-sizes/:sizeId/price/:magazineId` - Get specific price
 
-## Technology Stack
+### Bookings
+- GET `/api/bookings` - List bookings (supports filtering)
+- POST `/api/bookings` - Create booking
+- PUT `/api/bookings/:id` - Update booking  
+- DELETE `/api/bookings/:id` - Delete booking
+- GET `/api/bookings/customer/:id` - Customer booking summary
+- GET `/api/bookings/report/data` - Report data with filters
 
-### Backend
-- **Node.js** - Runtime environment
-- **Express.js** - Web framework
-- **MongoDB** - Database
-- **Mongoose** - MongoDB object modeling
-- **bcryptjs** - Password hashing
-- **jsonwebtoken** - JWT authentication
-- **express-validator** - Input validation
-- **nodemailer** - Email sending
-- **cors** - Cross-origin resource sharing
+### Dashboard
+- GET `/api/dashboard/stats` - Overall statistics
+- GET `/api/dashboard/current-issue/:magazineId` - Current issue breakdown
+- GET `/api/dashboard/publications` - Publications revenue summary
+- GET `/api/dashboard/top-customers` - Top customers by value
+- GET `/api/dashboard/recent-activity` - Recent bookings and deliveries
 
-### Frontend
-- **React 18** - Frontend library
-- **Redux Toolkit** - State management
-- **React Router** - Client-side routing
-- **React Hook Form** - Form handling
-- **Yup** - Schema validation
-- **Tailwind CSS** - Styling
-- **Axios** - HTTP client
+### Leaflet Delivery
+- GET `/api/leaflet-delivery` - List leaflet deliveries
+- POST `/api/leaflet-delivery` - Create leaflet delivery
+- PUT `/api/leaflet-delivery/:id` - Update leaflet delivery
+- DELETE `/api/leaflet-delivery/:id` - Delete leaflet delivery
+- GET `/api/leaflet-delivery/report/data` - Leaflet delivery reports
 
-## Development
+## Deployment
 
-### Backend Development
-```bash
-cd backend
-npm run dev  # Uses nodemon for auto-restart
+### Database Configuration
+For production, use MongoDB Atlas or a hosted MongoDB instance:
+
+```env
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/bookingsapp
 ```
 
-### Frontend Development
+### Frontend Build
 ```bash
 cd frontend
-npm start    # React development server
-```
-
-### Building for Production
-```bash
-# Build frontend
 npm run build
-
-# Frontend files will be in frontend/build/
 ```
 
-## Testing User Accounts
+### Process Management
+Use PM2 for production:
 
-You can create test accounts through the signup page or test the authentication flow:
+```bash
+npm install -g pm2
+pm2 start backend/server.js --name "booking-api"
+```
 
-1. Go to `http://localhost:3000`
-2. Click "create a new account"
-3. Fill in the signup form
-4. After registration, you'll be redirected to the dashboard
-5. Test logout and login functionality
+### Web Server
+Serve frontend build files through Nginx or similar web server.
 
-## Forgot Password Testing
+### Environment Variables
+Set all required environment variables on your hosting platform.
 
-Without email configuration:
-1. Go to forgot password page
-2. Enter an email address
-3. Check the browser's developer console or backend logs for the reset URL
-4. Use the reset URL to test password reset functionality
+## Multi-Tenant Support
+
+The system includes built-in multi-tenant support:
+- All data is isolated by user account
+- Each user sees only their own customers, magazines, and bookings
+- Perfect for SaaS deployment where multiple magazine publishers use the same system
+- JWT-based authentication ensures data security
+
+## Export and Integration
+
+### Data Export  
+- Reports can be exported to CSV format
+- Full booking data with calculated values
+- Filter before export for specific date ranges or criteria
+
+### Future CRM Integration
+- Customer model includes `crmId` field for external system integration
+- API structure supports webhook additions for real-time sync
+- RESTful design makes integration straightforward
 
 ## Troubleshooting
 
 ### Common Issues
 
-**MongoDB Connection Error:**
+**MongoDB Connection Issues**
 - Ensure MongoDB is running
-- Check connection string in `.env`
-- For Atlas, ensure IP whitelist is configured
+- Check connection string in `.env` file
+- Verify network connectivity
 
-**Port Already in Use:**
-- Change PORT in `backend/.env`
-- Kill existing processes: `lsof -ti:5000 | xargs kill -9`
+**Authentication Errors**  
+- Check JWT_SECRET is set
+- Ensure token isn't expired
+- Clear browser localStorage if needed
 
-**Frontend Build Issues:**
-- Clear node_modules: `rm -rf node_modules package-lock.json && npm install`
-- Clear browser cache
+**Chart/Graph Issues**
+- Ensure recharts library is installed
+- Check browser console for JavaScript errors
+- Verify data format matches expected structure
 
-**CORS Issues:**
-- Ensure backend is running on port 5000
-- Check proxy setting in `frontend/package.json`
+**Build Errors**
+- Clear node_modules and reinstall: `rm -rf node_modules && npm install`
+- Check Node.js version compatibility
+- Ensure all peer dependencies are installed
 
-### Environment Variables
-
-Make sure these are set in `backend/.env`:
-- `MONGODB_URI` - Your MongoDB connection string
-- `JWT_SECRET` - A secure random string (required)
-- `PORT` - Backend port (default: 5000)
-
-## Next Steps
-
-This authentication system is ready for extension with:
-- Booking functionality
-- User profiles
-- Admin panel
-- Email verification
-- Social login
-- Two-factor authentication
-
-## Security Notes
-
-For production deployment:
-1. Use a strong JWT secret (32+ random characters)
-2. Set NODE_ENV=production
-3. Use HTTPS
-4. Configure proper CORS origins
-5. Set up email service (Gmail, SendGrid, etc.)
-6. Use environment variables for all secrets
-7. Enable MongoDB authentication
-8. Set up proper logging and monitoring 
+For additional support or feature requests, please check the project repository issues section. 
