@@ -16,6 +16,7 @@ import Bookings from './pages/Bookings';
 import NewBooking from './pages/NewBooking';
 import LeafletDelivery from './pages/LeafletDelivery';
 import Reports from './pages/Reports';
+import UserProfile from './pages/UserProfile';
 import './index.css';
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
             <Route path="/bookings/new" element={<NewBooking />} />
             <Route path="/leaflet-delivery" element={<LeafletDelivery />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/profile" element={<UserProfile />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>
           <ToastContainer

@@ -31,6 +31,10 @@ const Layout = ({ children }) => {
     navigate('/login');
   };
 
+  const handleProfileClick = () => {
+    navigate('/profile');
+  };
+
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Customers', href: '/customers', icon: Users },
@@ -116,22 +120,29 @@ const Layout = ({ children }) => {
           </nav>
           <div className="flex-shrink-0 p-4 border-t border-gray-200">
             <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                  <span className="text-sm font-medium text-white">
-                    {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                  </span>
+              <button
+                onClick={handleProfileClick}
+                className="flex items-center flex-1 hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                title="View Profile"
+              >
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-medium text-white">
+                      {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div className="ml-3 flex-1">
-                <p className="text-sm font-medium text-gray-700 truncate">
-                  {user?.name || 'User'}
-                </p>
-                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
-              </div>
+                <div className="ml-3 flex-1 text-left">
+                  <p className="text-sm font-medium text-gray-700 truncate">
+                    {user?.name || 'User'}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                </div>
+              </button>
               <button
                 onClick={handleLogout}
                 className="ml-2 flex-shrink-0 p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                title="Logout"
               >
                 <LogOut className="h-5 w-5" />
               </button>
@@ -153,9 +164,13 @@ const Layout = ({ children }) => {
           </button>
           <div className="flex-1 px-4 flex justify-between">
             <div className="flex-1 flex">
-              <h1 className="ml-4 text-lg font-medium text-gray-900 self-center">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="ml-4 text-lg font-medium text-gray-900 self-center hover:text-blue-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
+                title="Go to Dashboard"
+              >
                 Magazine Booking System
-              </h1>
+              </button>
             </div>
             <div className="ml-4 flex items-center md:ml-6">
               <button

@@ -51,9 +51,13 @@ const Dashboard = () => {
                 </div>
               </div>
               <div className="ml-4">
-                <h1 className="text-2xl font-bold text-gray-900">
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="text-2xl font-bold text-gray-900 hover:text-blue-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
+                  title="Go to Dashboard"
+                >
                   Bookings App
-                </h1>
+                </button>
               </div>
             </div>
             
