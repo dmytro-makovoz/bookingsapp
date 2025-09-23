@@ -3,6 +3,12 @@ const router = express.Router();
 const BusinessType = require('../models/BusinessType');
 const auth = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
+const multer = require('multer');
+const csv = require('csv-parser');
+const fs = require('fs');
+
+// Configure multer for CSV file uploads
+const upload = multer({ dest: 'uploads/' });
 
 // Get all business types
 router.get('/', auth, async (req, res) => {
@@ -178,6 +184,105 @@ router.get('/search/:query', auth, async (req, res) => {
     res.json(businessTypes);
   } catch (error) {
     console.error('Error searching business types:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Import business types from CSV
+router.post('/import', [auth, upload.single('csvFile')], async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No CSV file provided' });
+    }
+
+    const results = [];
+    const errors = [];
+    let duplicates = 0;
+    let created = 0;
+
+    // Read and parse CSV file
+    fs.createReadStream(req.file.path)
+      .pipe(csv())
+      .on('data', (data) => {
+        results.push(data);
+      })
+      .on('end', async () => {
+        try {
+          // Process each row
+          for (let i = 0; i < results.length; i++) {
+            const row = results[i];
+            
+            // Get section from CSV (support common column names)
+            const section = row.section || row.Section || row.SECTION || 
+                           row.name || row.Name || row.NAME ||
+                           row.businessType || row.BusinessType || row.BUSINESSTYPE ||
+                           Object.values(row)[0]; // Use first column if no match
+            
+            if (!section || !section.trim()) {
+              errors.push(`Row ${i + 1}: Empty or invalid section name`);
+              continue;
+            }
+
+            const trimmedSection = section.trim();
+
+            try {
+              // Check if business type already exists
+              const existingBusinessType = await BusinessType.findOne({ 
+                section: { $regex: new RegExp(`^${trimmedSection}$`, 'i') }
+              });
+              
+              if (existingBusinessType) {
+                duplicates++;
+                continue;
+              }
+
+              // Create new business type
+              const businessType = new BusinessType({
+                section: trimmedSection
+              });
+
+              await businessType.save();
+              created++;
+            } catch (saveError) {
+              if (saveError.code === 11000) {
+                duplicates++;
+              } else {
+                errors.push(`Row ${i + 1}: ${saveError.message}`);
+              }
+            }
+          }
+
+          // Clean up uploaded file
+          fs.unlinkSync(req.file.path);
+
+          res.json({
+            message: 'CSV import completed',
+            summary: {
+              totalRows: results.length,
+              created: created,
+              duplicates: duplicates,
+              errors: errors.length
+            },
+            errors: errors
+          });
+
+        } catch (processingError) {
+          console.error('Error processing CSV:', processingError);
+          fs.unlinkSync(req.file.path);
+          res.status(500).json({ message: 'Error processing CSV file' });
+        }
+      })
+      .on('error', (csvError) => {
+        console.error('Error reading CSV:', csvError);
+        fs.unlinkSync(req.file.path);
+        res.status(400).json({ message: 'Invalid CSV file format' });
+      });
+
+  } catch (error) {
+    console.error('Error importing business types:', error);
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
     res.status(500).json({ message: 'Server error' });
   }
 });

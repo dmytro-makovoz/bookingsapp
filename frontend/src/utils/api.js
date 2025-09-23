@@ -75,6 +75,15 @@ export const businessTypesAPI = {
   delete: (id) => api.delete(`/business-types/${id}`),
   archive: (id, archived) => api.patch(`/business-types/${id}/archive`, { archived }),
   search: (query, includeArchived = false) => api.get(`/business-types/search/${query}`, { params: { includeArchived } }),
+  importCSV: (formData) => {
+    return axios.create({
+      baseURL: API_BASE_URL,
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'multipart/form-data',
+      },
+    }).post('/business-types/import', formData);
+  },
 };
 
 // Magazines API
