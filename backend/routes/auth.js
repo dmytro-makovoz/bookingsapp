@@ -5,6 +5,7 @@ const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
 const protect = require('../middleware/auth');
+const { seedContentTypesForUser } = require('../utils/seedContentTypes');
 
 const router = express.Router();
 
@@ -65,6 +66,14 @@ router.post('/signup', [
     });
 
     if (user) {
+      // Seed default content types for the new user
+      try {
+        await seedContentTypesForUser(user._id);
+      } catch (error) {
+        console.error('Error seeding content types for new user:', error);
+        // Don't fail registration if content type seeding fails
+      }
+
       res.status(201).json({
         success: true,
         message: 'User registered successfully',

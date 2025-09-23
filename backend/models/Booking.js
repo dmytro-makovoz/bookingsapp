@@ -18,8 +18,7 @@ const bookingSchema = new mongoose.Schema({
   }],
   contentType: {
     type: String,
-    required: true,
-    enum: ['Advert', 'Article', 'Puzzle', 'Advertorial', 'Front Cover', 'In-house']
+    required: false // Made optional as per user request
   },
   // Pricing and discounts
   basePrice: {

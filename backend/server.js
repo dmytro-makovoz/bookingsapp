@@ -12,9 +12,11 @@ const customerRoutes = require('./routes/customers');
 const businessTypeRoutes = require('./routes/businessTypes');
 const magazineRoutes = require('./routes/magazines');
 const contentSizeRoutes = require('./routes/contentSizes');
+const contentTypeRoutes = require('./routes/contentTypes');
 const bookingRoutes = require('./routes/bookings');
 const leafletDeliveryRoutes = require('./routes/leafletDelivery');
 const dashboardRoutes = require('./routes/dashboard');
+const { seedAllUsers } = require('./utils/seedContentTypes');
 
 const app = express();
 
@@ -32,6 +34,7 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/business-types', businessTypeRoutes);
 app.use('/api/magazines', magazineRoutes);
 app.use('/api/content-sizes', contentSizeRoutes);
+app.use('/api/content-types', contentTypeRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/leaflet-delivery', leafletDeliveryRoutes);
 app.use('/api/dashboard', dashboardRoutes);
@@ -51,8 +54,18 @@ app.use((err, req, res, next) => {
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/bookingsapp';
 
 mongoose.connect(MONGODB_URI)
-  .then(() => {
+  .then(async () => {
     console.log('Connected to MongoDB');
+    
+    // Run content types seeding for existing users
+    try {
+      console.log('Running content types seeding...');
+      await seedAllUsers();
+      console.log('Content types seeding completed');
+    } catch (error) {
+      console.error('Error during content types seeding:', error);
+      // Don't prevent server startup if seeding fails
+    }
     
     // Start server
     const PORT = process.env.PORT || 5000;

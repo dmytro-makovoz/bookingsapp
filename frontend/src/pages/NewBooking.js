@@ -13,13 +13,14 @@ import {
   createBooking 
 } from '../store/slices/bookingSlice';
 import { contentSizesAPI } from '../utils/api';
+import api from '../utils/api';
 import { toast } from 'react-toastify';
 
 const bookingSchema = yup.object().shape({
   customer: yup.string().required('Customer is required'),
   contentSize: yup.string().required('Content size is required'),
   magazines: yup.array().min(1, 'At least one magazine is required'),
-  contentType: yup.string().required('Content type is required'),
+  contentType: yup.string(), // Remove .required() to make it optional
   basePrice: yup.number().required('Base price is required').min(0),
   firstIssue: yup.string().required('First issue is required'),
   discountPercentage: yup.number().min(0).max(100),
@@ -56,6 +57,7 @@ const NewBooking = () => {
   const [selectedContentSize, setSelectedContentSize] = useState(null);
   const [basePrice, setBasePrice] = useState(0);
   const [availableIssues, setAvailableIssues] = useState([]);
+  const [contentTypes, setContentTypes] = useState([]);
 
   const watchedValues = watch();
   const watchedContentSize = watch('contentSize');
@@ -64,7 +66,26 @@ const NewBooking = () => {
     dispatch(fetchCustomers());
     dispatch(fetchMagazines());
     dispatch(fetchContentSizes());
+    fetchContentTypes();
   }, [dispatch]);
+
+  const fetchContentTypes = async () => {
+    try {
+      const response = await api.get('/content-types');
+      setContentTypes(response.data);
+    } catch (error) {
+      console.error('Error fetching content types:', error);
+      // Fallback to default content types if API fails
+      setContentTypes([
+        { _id: 'default-1', name: 'Advert' },
+        { _id: 'default-2', name: 'Article' },
+        { _id: 'default-3', name: 'Puzzle' },
+        { _id: 'default-4', name: 'Advertorial' },
+        { _id: 'default-5', name: 'Front Cover' },
+        { _id: 'default-6', name: 'In-house' }
+      ]);
+    }
+  };
 
   // Calculate available issues from selected magazines
   useEffect(() => {
@@ -159,7 +180,7 @@ const NewBooking = () => {
     setValue('contentSize', value);
   };
 
-  const contentTypes = ['Advert', 'Article', 'Puzzle', 'Advertorial', 'Front Cover', 'In-house'];
+
 
   return (
     <Layout>
@@ -191,7 +212,7 @@ const NewBooking = () => {
                 <option value="">Select a customer...</option>
                 {customers.map((customer) => (
                   <option key={customer._id} value={customer._id}>
-                    {customer.name} - {customer.businessName}
+                    {customer.name} {customer.businessName}
                   </option>
                 ))}
               </select>
@@ -231,7 +252,7 @@ const NewBooking = () => {
               {/* Content Type */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Content Type *
+                  Content Type
                 </label>
                 <select
                   {...register('contentType')}
@@ -239,8 +260,8 @@ const NewBooking = () => {
                 >
                   <option value="">Select content type...</option>
                   {contentTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
+                    <option key={type._id} value={type.name}>
+                      {type.name}
                     </option>
                   ))}
                 </select>

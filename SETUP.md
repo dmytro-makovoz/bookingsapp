@@ -88,15 +88,15 @@ The application will be available at:
 1. Go to "Customers" in the navigation
 2. Click "Add Customer"
 3. Enter customer details:
-   - Name (e.g., "JP Plumbing")
-   - Business Category (e.g., "Plumbing and Heating Services")  
-   - Booking Notes (optional, e.g., "Must go in first 11 pages")
+   - Name (e.g. "JP Plumbing")
+   - Business Category (e.g. "Plumbing and Heating Services")  
+   - Booking Notes (optional, e.g. "Must go in first 11 pages")
 
 #### Add Magazines
 1. Go to "Magazines" in the navigation
 2. Click "Add Magazine"
 3. Set up magazine with issues:
-   - Magazine name (e.g., "Southampton Magazine")
+   - Magazine name (e.g. "Southampton Magazine")
    - Issues with names, page counts, and start dates:
      - Nov25, 40 pages, start date: 2025-09-01
      - Dec25, 36 pages, start date: 2025-10-01
@@ -155,8 +155,8 @@ The application will be available at:
 
 ### Pricing and Discounts
 - Base price calculated from content size + magazine combination
-- Percentage discounts (e.g., 10% off)
-- Fixed value discounts (e.g., £20 off)
+- Percentage discounts (e.g. 10% off)
+- Fixed value discounts (e.g. £20 off)
 - Additional charges for special placement
 - Net value calculated automatically
 

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Users, BookOpen, Layers } from 'lucide-react';
+import { Users, BookOpen, Layers, Tag } from 'lucide-react';
 import Layout from '../components/Layout';
 import BusinessTypes from './BusinessTypes';
 import ContentSizes from './ContentSizes';
+import ContentTypes from './ContentTypes';
 import Magazines from './Magazines';
 
 const Settings = () => {
@@ -22,6 +23,12 @@ const Settings = () => {
       component: ContentSizes
     },
     {
+      id: 'content-types',
+      name: 'Content Types',
+      icon: Tag,
+      component: ContentTypes
+    },
+    {
       id: 'magazines',
       name: 'Magazines',
       icon: BookOpen,
@@ -38,7 +45,7 @@ const Settings = () => {
           <div className="sm:flex-auto">
             <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
             <p className="mt-2 text-sm text-gray-700">
-              Manage your business types, content sizes, and magazines.
+              Manage your business types, content sizes, content types, and magazines.
             </p>
           </div>
         </div>
