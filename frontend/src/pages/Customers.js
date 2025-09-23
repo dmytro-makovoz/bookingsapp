@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { 
@@ -15,7 +15,8 @@ import {
 import Layout from '../components/Layout';
 import { 
   fetchCustomers, 
-  createCustomer, 
+  fetchBusinessTypes,
+  addCustomer,
   updateCustomer, 
   deleteCustomer 
 } from '../store/slices/bookingSlice';
@@ -24,14 +25,14 @@ import { toast } from 'react-toastify';
 
 const customerSchema = yup.object().shape({
   name: yup.string().required('Customer name is required'),
-  businessCategory: yup.string().required('Business category is required'),
+  businessTypes: yup.array().min(1, 'At least one business type is required'),
   bookingNote: yup.string(),
 });
 
-const CustomerModal = ({ customer, onClose, onSave }) => {
-  const { register, handleSubmit, formState: { errors }, reset } = useForm({
+const CustomerModal = ({ customer, businessTypes, onClose, onSave }) => {
+  const { register, handleSubmit, control, formState: { errors }, reset } = useForm({
     resolver: yupResolver(customerSchema),
-    defaultValues: customer || {}
+    defaultValues: customer || { businessTypes: [] }
   });
 
   const onSubmit = (data) => {
@@ -40,7 +41,11 @@ const CustomerModal = ({ customer, onClose, onSave }) => {
   };
 
   useEffect(() => {
-    reset(customer || {});
+    const customerData = customer ? {
+      ...customer,
+      businessTypes: customer.businessTypes?.map(bt => bt._id) || []
+    } : { businessTypes: [] };
+    reset(customerData);
   }, [customer, reset]);
 
   return (
@@ -68,16 +73,37 @@ const CustomerModal = ({ customer, onClose, onSave }) => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Business Category
+              Business Types
             </label>
-            <input
-              type="text"
-              {...register('businessCategory')}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              placeholder="e.g., Plumbing and Heating Services"
+            <Controller
+              name="businessTypes"
+              control={control}
+              render={({ field }) => (
+                <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-md">
+                  {businessTypes.map((businessType) => (
+                    <label key={businessType._id} className="flex items-center p-2 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        value={businessType._id}
+                        checked={field.value?.includes(businessType._id) || false}
+                        onChange={(e) => {
+                          const currentValue = field.value || [];
+                          if (e.target.checked) {
+                            field.onChange([...currentValue, businessType._id]);
+                          } else {
+                            field.onChange(currentValue.filter(id => id !== businessType._id));
+                          }
+                        }}
+                        className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span className="text-sm text-gray-700">{businessType.section}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             />
-            {errors.businessCategory && (
-              <p className="text-red-600 text-sm mt-1">{errors.businessCategory.message}</p>
+            {errors.businessTypes && (
+              <p className="text-red-600 text-sm mt-1">{errors.businessTypes.message}</p>
             )}
           </div>
 
@@ -116,7 +142,7 @@ const CustomerModal = ({ customer, onClose, onSave }) => {
 
 const Customers = () => {
   const dispatch = useDispatch();
-  const { customers, loading } = useSelector((state) => state.booking);
+  const { customers, businessTypes, loading } = useSelector((state) => state.booking);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -124,6 +150,7 @@ const Customers = () => {
 
   useEffect(() => {
     dispatch(fetchCustomers());
+    dispatch(fetchBusinessTypes());
   }, [dispatch]);
 
   useEffect(() => {
@@ -131,7 +158,9 @@ const Customers = () => {
       setFilteredCustomers(
         customers.filter(customer =>
           customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          customer.businessCategory.toLowerCase().includes(searchTerm.toLowerCase())
+          (customer.businessTypes && customer.businessTypes.some(bt => 
+            bt.section && bt.section.toLowerCase().includes(searchTerm.toLowerCase())
+          ))
         )
       );
     } else {
@@ -147,7 +176,7 @@ const Customers = () => {
         toast.success('Customer updated successfully');
       } else {
         const response = await customersAPI.create(data);
-        dispatch(createCustomer(response.data));
+        dispatch(addCustomer(response.data));
         toast.success('Customer created successfully');
       }
       setIsModalOpen(false);
@@ -234,9 +263,16 @@ const Customers = () => {
                             </p>
                           </div>
                           <div className="flex items-center mt-1 space-x-4 text-sm text-gray-500">
-                            <div className="flex items-center">
+                            <div className="flex items-center flex-wrap">
                               <Building className="h-4 w-4 mr-1" />
-                              {customer.businessCategory}
+                              {customer.businessTypes && customer.businessTypes.length > 0 
+                                ? customer.businessTypes.map((bt, index) => (
+                                    <span key={bt._id} className="inline-flex items-center px-2 py-1 mr-1 mb-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                                      {bt.section}
+                                    </span>
+                                  ))
+                                : <span>No business types</span>
+                              }
                             </div>
                             {customer.bookingNote && (
                               <div className="flex items-center">
@@ -292,6 +328,7 @@ const Customers = () => {
         {isModalOpen && (
           <CustomerModal
             customer={editingCustomer}
+            businessTypes={businessTypes}
             onClose={() => {
               setIsModalOpen(false);
               setEditingCustomer(null);

@@ -9,6 +9,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import BookingDashboard from './pages/BookingDashboard';
 import Customers from './pages/Customers';
+import BusinessTypes from './pages/BusinessTypes';
 import Magazines from './pages/Magazines';
 import ContentSizes from './pages/ContentSizes';
 import Bookings from './pages/Bookings';
@@ -29,6 +30,7 @@ function App() {
             <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/dashboard" element={<BookingDashboard />} />
             <Route path="/customers" element={<Customers />} />
+            <Route path="/business-types" element={<BusinessTypes />} />
             <Route path="/magazines" element={<Magazines />} />
             <Route path="/content-sizes" element={<ContentSizes />} />
             <Route path="/bookings" element={<Bookings />} />

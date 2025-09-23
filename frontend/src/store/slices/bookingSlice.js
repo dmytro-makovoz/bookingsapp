@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { 
   customersAPI, 
+  businessTypesAPI,
   magazinesAPI, 
   contentSizesAPI, 
   bookingsAPI, 
@@ -29,6 +30,31 @@ export const createCustomer = createAsyncThunk(
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to create customer');
+    }
+  }
+);
+
+// Async thunks for business types
+export const fetchBusinessTypes = createAsyncThunk(
+  'booking/fetchBusinessTypes',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await businessTypesAPI.getAll();
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch business types');
+    }
+  }
+);
+
+export const createBusinessType = createAsyncThunk(
+  'booking/createBusinessType',
+  async (businessTypeData, { rejectWithValue }) => {
+    try {
+      const response = await businessTypesAPI.create(businessTypeData);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to create business type');
     }
   }
 );
@@ -147,6 +173,7 @@ export const fetchPublications = createAsyncThunk(
 
 const initialState = {
   customers: [],
+  businessTypes: [],
   magazines: [],
   contentSizes: [],
   bookings: [],
@@ -156,6 +183,7 @@ const initialState = {
   publications: [],
   loading: {
     customers: false,
+    businessTypes: false,
     magazines: false,
     contentSizes: false,
     bookings: false,
@@ -190,6 +218,21 @@ const bookingSlice = createSlice({
   deleteCustomer: (state, action) => {
     state.customers = state.customers.filter(c => c._id !== action.payload);
   },
+  addCustomer: (state, action) => {
+    state.customers.push(action.payload);
+  },
+  updateBusinessType: (state, action) => {
+    const index = state.businessTypes.findIndex(bt => bt._id === action.payload._id);
+    if (index !== -1) {
+      state.businessTypes[index] = action.payload;
+    }
+  },
+  deleteBusinessType: (state, action) => {
+    state.businessTypes = state.businessTypes.filter(bt => bt._id !== action.payload);
+  },
+  addBusinessType: (state, action) => {
+    state.businessTypes.push(action.payload);
+  },
   updateMagazine: (state, action) => {
     const index = state.magazines.findIndex(m => m._id === action.payload._id);
     if (index !== -1) {
@@ -199,6 +242,9 @@ const bookingSlice = createSlice({
   deleteMagazine: (state, action) => {
     state.magazines = state.magazines.filter(m => m._id !== action.payload);
   },
+  addMagazine: (state, action) => {
+    state.magazines.push(action.payload);
+  },
   updateContentSize: (state, action) => {
     const index = state.contentSizes.findIndex(cs => cs._id === action.payload._id);
     if (index !== -1) {
@@ -207,6 +253,9 @@ const bookingSlice = createSlice({
   },
   deleteContentSize: (state, action) => {
     state.contentSizes = state.contentSizes.filter(cs => cs._id !== action.payload);
+  },
+  addContentSize: (state, action) => {
+    state.contentSizes.push(action.payload);
   },
   },
   extraReducers: (builder) => {
@@ -226,6 +275,23 @@ const bookingSlice = createSlice({
       })
       .addCase(createCustomer.fulfilled, (state, action) => {
         state.customers.push(action.payload);
+      })
+
+    // Business Types
+      .addCase(fetchBusinessTypes.pending, (state) => {
+        state.loading.businessTypes = true;
+        state.error = null;
+      })
+      .addCase(fetchBusinessTypes.fulfilled, (state, action) => {
+        state.loading.businessTypes = false;
+        state.businessTypes = action.payload;
+      })
+      .addCase(fetchBusinessTypes.rejected, (state, action) => {
+        state.loading.businessTypes = false;
+        state.error = action.payload;
+      })
+      .addCase(createBusinessType.fulfilled, (state, action) => {
+        state.businessTypes.push(action.payload);
       })
 
     // Magazines
@@ -307,10 +373,16 @@ export const {
   deleteBooking,
   updateCustomer,
   deleteCustomer,
+  addCustomer,
+  updateBusinessType,
+  deleteBusinessType,
+  addBusinessType,
   updateMagazine,
   deleteMagazine,
+  addMagazine,
   updateContentSize,
   deleteContentSize,
+  addContentSize,
 } = bookingSlice.actions;
 
 export default bookingSlice.reducer; 

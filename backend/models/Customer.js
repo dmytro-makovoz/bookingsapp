@@ -6,11 +6,11 @@ const customerSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  businessCategory: {
-    type: String,
-    required: true,
-    trim: true
-  },
+  businessTypes: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'BusinessType',
+    required: true
+  }],
   bookingNote: {
     type: String,
     trim: true
@@ -31,6 +31,6 @@ const customerSchema = new mongoose.Schema({
 });
 
 // Create index for efficient searching
-customerSchema.index({ name: 'text', businessCategory: 'text' });
+customerSchema.index({ name: 'text' });
 
 module.exports = mongoose.model('Customer', customerSchema); 

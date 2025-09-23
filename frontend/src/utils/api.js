@@ -49,6 +49,16 @@ export const customersAPI = {
   search: (query) => api.get(`/customers/search/${query}`),
 };
 
+// Business Types API
+export const businessTypesAPI = {
+  getAll: () => api.get('/business-types'),
+  getById: (id) => api.get(`/business-types/${id}`),
+  create: (businessTypeData) => api.post('/business-types', businessTypeData),
+  update: (id, businessTypeData) => api.put(`/business-types/${id}`, businessTypeData),
+  delete: (id) => api.delete(`/business-types/${id}`),
+  search: (query) => api.get(`/business-types/search/${query}`),
+};
+
 // Magazines API
 export const magazinesAPI = {
   getAll: () => api.get('/magazines'),

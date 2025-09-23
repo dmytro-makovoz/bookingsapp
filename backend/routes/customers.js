@@ -7,7 +7,9 @@ const { body, validationResult } = require('express-validator');
 // Get all customers for the authenticated user
 router.get('/', auth, async (req, res) => {
   try {
-    const customers = await Customer.find({ createdBy: req.user.id }).sort({ name: 1 });
+    const customers = await Customer.find({ createdBy: req.user.id })
+      .populate('businessTypes', 'section')
+      .sort({ name: 1 });
     res.json(customers);
   } catch (error) {
     console.error('Error fetching customers:', error);
@@ -21,7 +23,7 @@ router.get('/:id', auth, async (req, res) => {
     const customer = await Customer.findOne({ 
       _id: req.params.id, 
       createdBy: req.user.id 
-    });
+    }).populate('businessTypes', 'section');
     
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
@@ -38,7 +40,8 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/', [
   auth,
   body('name').trim().notEmpty().withMessage('Name is required'),
-  body('businessCategory').trim().notEmpty().withMessage('Business category is required'),
+  body('businessTypes').isArray({ min: 1 }).withMessage('At least one business type is required'),
+  body('businessTypes.*').isMongoId().withMessage('Valid business types are required'),
   body('bookingNote').optional().trim()
 ], async (req, res) => {
   try {
@@ -47,7 +50,14 @@ router.post('/', [
       return res.status(400).json({ message: 'Validation failed', errors: errors.array() });
     }
 
-    const { name, businessCategory, bookingNote } = req.body;
+    const { name, businessTypes, bookingNote } = req.body;
+
+    // Verify all business types exist
+    const BusinessType = require('../models/BusinessType');
+    const businessTypeCount = await BusinessType.countDocuments({ _id: { $in: businessTypes } });
+    if (businessTypeCount !== businessTypes.length) {
+      return res.status(400).json({ message: 'One or more business types are invalid' });
+    }
 
     // Check if customer with same name already exists for this user
     const existingCustomer = await Customer.findOne({ 
@@ -61,12 +71,15 @@ router.post('/', [
 
     const customer = new Customer({
       name,
-      businessCategory,
+      businessTypes,
       bookingNote,
       createdBy: req.user.id
     });
 
     await customer.save();
+    
+    // Populate business types before sending response
+    await customer.populate('businessTypes', 'section');
     res.status(201).json(customer);
   } catch (error) {
     console.error('Error creating customer:', error);
@@ -78,7 +91,8 @@ router.post('/', [
 router.put('/:id', [
   auth,
   body('name').trim().notEmpty().withMessage('Name is required'),
-  body('businessCategory').trim().notEmpty().withMessage('Business category is required'),
+  body('businessTypes').isArray({ min: 1 }).withMessage('At least one business type is required'),
+  body('businessTypes.*').isMongoId().withMessage('Valid business types are required'),
   body('bookingNote').optional().trim()
 ], async (req, res) => {
   try {
@@ -87,7 +101,14 @@ router.put('/:id', [
       return res.status(400).json({ message: 'Validation failed', errors: errors.array() });
     }
 
-    const { name, businessCategory, bookingNote } = req.body;
+    const { name, businessTypes, bookingNote } = req.body;
+
+    // Verify all business types exist
+    const BusinessType = require('../models/BusinessType');
+    const businessTypeCount = await BusinessType.countDocuments({ _id: { $in: businessTypes } });
+    if (businessTypeCount !== businessTypes.length) {
+      return res.status(400).json({ message: 'One or more business types are invalid' });
+    }
 
     const customer = await Customer.findOne({ 
       _id: req.params.id, 
@@ -110,10 +131,13 @@ router.put('/:id', [
     }
 
     customer.name = name;
-    customer.businessCategory = businessCategory;
+    customer.businessTypes = businessTypes;
     customer.bookingNote = bookingNote;
 
     await customer.save();
+    
+    // Populate business types before sending response
+    await customer.populate('businessTypes', 'section');
     res.json(customer);
   } catch (error) {
     console.error('Error updating customer:', error);
@@ -145,13 +169,21 @@ router.delete('/:id', auth, async (req, res) => {
 router.get('/search/:query', auth, async (req, res) => {
   try {
     const searchQuery = req.params.query;
+    
+    // Find business types that match the search query
+    const BusinessType = require('../models/BusinessType');
+    const matchingBusinessTypes = await BusinessType.find({
+      section: { $regex: searchQuery, $options: 'i' }
+    });
+    const businessTypeIds = matchingBusinessTypes.map(bt => bt._id);
+    
     const customers = await Customer.find({
       createdBy: req.user.id,
       $or: [
         { name: { $regex: searchQuery, $options: 'i' } },
-        { businessCategory: { $regex: searchQuery, $options: 'i' } }
+        { businessTypes: { $in: businessTypeIds } }
       ]
-    }).sort({ name: 1 });
+    }).populate('businessTypes', 'section').sort({ name: 1 });
     
     res.json(customers);
   } catch (error) {

@@ -34,6 +34,7 @@ const Layout = ({ children }) => {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Customers', href: '/customers', icon: Users },
+    { name: 'Business Types', href: '/business-types', icon: Settings },
     { name: 'Magazines', href: '/magazines', icon: BookOpen },
     { name: 'Content Sizes', href: '/content-sizes', icon: Layers },
     { name: 'New Booking', href: '/bookings/new', icon: PlusCircle },

@@ -9,6 +9,7 @@ dotenv.config();
 // Import routes
 const authRoutes = require('./routes/auth');
 const customerRoutes = require('./routes/customers');
+const businessTypeRoutes = require('./routes/businessTypes');
 const magazineRoutes = require('./routes/magazines');
 const contentSizeRoutes = require('./routes/contentSizes');
 const bookingRoutes = require('./routes/bookings');
@@ -27,6 +28,7 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/customers', customerRoutes);
+app.use('/api/business-types', businessTypeRoutes);
 app.use('/api/magazines', magazineRoutes);
 app.use('/api/content-sizes', contentSizeRoutes);
 app.use('/api/bookings', bookingRoutes);

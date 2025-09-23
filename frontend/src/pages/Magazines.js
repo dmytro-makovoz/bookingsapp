@@ -16,7 +16,7 @@ import {
 import Layout from '../components/Layout';
 import { 
   fetchMagazines, 
-  createMagazine, 
+  addMagazine, 
   updateMagazine, 
   deleteMagazine 
 } from '../store/slices/bookingSlice';
@@ -249,7 +249,7 @@ const Magazines = () => {
         toast.success('Magazine updated successfully');
       } else {
         const response = await magazinesAPI.create(data);
-        dispatch(createMagazine(response.data));
+        dispatch(addMagazine(response.data));
         toast.success('Magazine created successfully');
       }
       setIsModalOpen(false);

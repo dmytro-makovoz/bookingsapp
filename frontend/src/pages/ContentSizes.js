@@ -16,7 +16,7 @@ import Layout from '../components/Layout';
 import { 
   fetchContentSizes, 
   fetchMagazines,
-  createContentSize, 
+  addContentSize, 
   updateContentSize, 
   deleteContentSize 
 } from '../store/slices/bookingSlice';
@@ -244,7 +244,7 @@ const ContentSizes = () => {
         toast.success('Content size updated successfully');
       } else {
         const response = await contentSizesAPI.create(data);
-        dispatch(createContentSize(response.data));
+        dispatch(addContentSize(response.data));
         toast.success('Content size created successfully');
       }
       setIsModalOpen(false);
