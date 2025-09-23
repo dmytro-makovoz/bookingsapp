@@ -50,11 +50,13 @@ const StatCard = ({ title, value, icon: Icon, color, change }) => (
           </dl>
         </div>
       </div>
-      {change && (
+      {change !== undefined && change !== null && (
         <div className="mt-2">
           <div className="flex items-center text-sm">
-            <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-            <span className="text-green-600">{change}</span>
+            <TrendingUp className={`h-4 w-4 mr-1 ${change >= 0 ? 'text-green-500' : 'text-red-500'}`} />
+            <span className={change >= 0 ? 'text-green-600' : 'text-red-600'}>
+              {change >= 0 ? '+' : ''}{change}%
+            </span>
             <span className="text-gray-500 ml-2">from last month</span>
           </div>
         </div>
@@ -111,28 +113,28 @@ const BookingDashboard = () => {
             value={dashboardStats.totalCustomers || 0}
             icon={Users}
             color="text-blue-600"
-            change="+12%"
+            change={dashboardStats.customerChange}
           />
           <StatCard
             title="Active Magazines"
             value={dashboardStats.totalMagazines || 0}
             icon={BookOpen}
             color="text-green-600"
-            change="+3%"
+            change={dashboardStats.magazineChange}
           />
           <StatCard
             title="Active Bookings"
             value={dashboardStats.totalBookings || 0}
             icon={FileText}
             color="text-purple-600"
-            change="+8%"
+            change={dashboardStats.bookingChange}
           />
           <StatCard
             title="Leaflet Deliveries"
             value={dashboardStats.totalLeafletDeliveries || 0}
             icon={Truck}
             color="text-orange-600"
-            change="+5%"
+            change={dashboardStats.leafletDeliveryChange}
           />
         </div>
 
@@ -143,21 +145,21 @@ const BookingDashboard = () => {
             value={formatCurrency(dashboardStats.totalBookingValue || 0)}
             icon={DollarSign}
             color="text-green-600"
-            change="+12%"
+            change={dashboardStats.bookingValueChange}
           />
           <StatCard
             title="Leaflet Revenue"
             value={formatCurrency(dashboardStats.totalLeafletValue || 0)}
             icon={Truck}
             color="text-blue-600"
-            change="+18%"
+            change={dashboardStats.leafletValueChange}
           />
           <StatCard
             title="Total Revenue"
             value={formatCurrency(dashboardStats.totalRevenue || 0)}
             icon={DollarSign}
             color="text-yellow-600"
-            change="+15%"
+            change={dashboardStats.totalRevenueChange}
           />
         </div>
 

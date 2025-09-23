@@ -10,14 +10,40 @@ const auth = require('../middleware/auth');
 // Get dashboard summary statistics
 router.get('/stats', auth, async (req, res) => {
   try {
+    // Calculate date ranges for current and previous month
+    const now = new Date();
+    const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+    // Helper function to calculate percentage change
+    const calculatePercentageChange = (current, previous) => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return Math.round(((current - previous) / previous) * 100);
+    };
+
     const [
+      // Current totals
       totalCustomers,
       totalMagazines,
       totalBookings,
       totalLeafletDeliveries,
       totalBookingValue,
-      totalLeafletValue
+      totalLeafletValue,
+      // Current month stats
+      currentMonthCustomers,
+      currentMonthBookings,
+      currentMonthLeafletDeliveries,
+      currentMonthBookingValue,
+      currentMonthLeafletValue,
+      // Previous month stats
+      previousMonthCustomers,
+      previousMonthBookings,
+      previousMonthLeafletDeliveries,
+      previousMonthBookingValue,
+      previousMonthLeafletValue
     ] = await Promise.all([
+      // Current totals
       Customer.countDocuments({ createdBy: req.user.id }),
       Magazine.countDocuments({ createdBy: req.user.id }),
       Booking.countDocuments({ createdBy: req.user.id, status: 'Active' }),
@@ -29,17 +55,123 @@ router.get('/stats', auth, async (req, res) => {
       LeafletDelivery.aggregate([
         { $match: { createdBy: req.user.id, status: 'Active' } },
         { $group: { _id: null, total: { $sum: '$charge' } } }
+      ]),
+      // Current month stats
+      Customer.countDocuments({ 
+        createdBy: req.user.id, 
+        createdAt: { $gte: startOfCurrentMonth } 
+      }),
+      Booking.countDocuments({ 
+        createdBy: req.user.id, 
+        status: 'Active', 
+        createdAt: { $gte: startOfCurrentMonth } 
+      }),
+      LeafletDelivery.countDocuments({ 
+        createdBy: req.user.id, 
+        status: 'Active', 
+        createdAt: { $gte: startOfCurrentMonth } 
+      }),
+      Booking.aggregate([
+        { 
+          $match: { 
+            createdBy: req.user.id, 
+            status: 'Active', 
+            createdAt: { $gte: startOfCurrentMonth } 
+          } 
+        },
+        { $group: { _id: null, total: { $sum: '$netValue' } } }
+      ]),
+      LeafletDelivery.aggregate([
+        { 
+          $match: { 
+            createdBy: req.user.id, 
+            status: 'Active', 
+            createdAt: { $gte: startOfCurrentMonth } 
+          } 
+        },
+        { $group: { _id: null, total: { $sum: '$charge' } } }
+      ]),
+      // Previous month stats
+      Customer.countDocuments({ 
+        createdBy: req.user.id, 
+        createdAt: { 
+          $gte: startOfPreviousMonth, 
+          $lte: endOfPreviousMonth 
+        } 
+      }),
+      Booking.countDocuments({ 
+        createdBy: req.user.id, 
+        status: 'Active', 
+        createdAt: { 
+          $gte: startOfPreviousMonth, 
+          $lte: endOfPreviousMonth 
+        } 
+      }),
+      LeafletDelivery.countDocuments({ 
+        createdBy: req.user.id, 
+        status: 'Active', 
+        createdAt: { 
+          $gte: startOfPreviousMonth, 
+          $lte: endOfPreviousMonth 
+        } 
+      }),
+      Booking.aggregate([
+        { 
+          $match: { 
+            createdBy: req.user.id, 
+            status: 'Active', 
+            createdAt: { 
+              $gte: startOfPreviousMonth, 
+              $lte: endOfPreviousMonth 
+            } 
+          } 
+        },
+        { $group: { _id: null, total: { $sum: '$netValue' } } }
+      ]),
+      LeafletDelivery.aggregate([
+        { 
+          $match: { 
+            createdBy: req.user.id, 
+            status: 'Active', 
+            createdAt: { 
+              $gte: startOfPreviousMonth, 
+              $lte: endOfPreviousMonth 
+            } 
+          } 
+        },
+        { $group: { _id: null, total: { $sum: '$charge' } } }
       ])
     ]);
+
+    // Extract values and calculate changes
+    const currentBookingValue = currentMonthBookingValue[0]?.total || 0;
+    const currentLeafletValue = currentMonthLeafletValue[0]?.total || 0;
+    const prevBookingValue = previousMonthBookingValue[0]?.total || 0;
+    const prevLeafletValue = previousMonthLeafletValue[0]?.total || 0;
+    
+    const totalBookingValueAll = totalBookingValue[0]?.total || 0;
+    const totalLeafletValueAll = totalLeafletValue[0]?.total || 0;
+    const totalRevenueAll = totalBookingValueAll + totalLeafletValueAll;
 
     res.json({
       totalCustomers,
       totalMagazines,
       totalBookings,
       totalLeafletDeliveries,
-      totalBookingValue: totalBookingValue[0]?.total || 0,
-      totalLeafletValue: totalLeafletValue[0]?.total || 0,
-      totalRevenue: (totalBookingValue[0]?.total || 0) + (totalLeafletValue[0]?.total || 0)
+      totalBookingValue: totalBookingValueAll,
+      totalLeafletValue: totalLeafletValueAll,
+      totalRevenue: totalRevenueAll,
+      // Percentage changes
+      customerChange: calculatePercentageChange(currentMonthCustomers, previousMonthCustomers),
+      magazineChange: calculatePercentageChange(0, 0), // Magazines don't change monthly typically
+      bookingChange: calculatePercentageChange(currentMonthBookings, previousMonthBookings),
+      leafletDeliveryChange: calculatePercentageChange(currentMonthLeafletDeliveries, previousMonthLeafletDeliveries),
+      bookingValueChange: calculatePercentageChange(currentBookingValue, prevBookingValue),
+      leafletValueChange: calculatePercentageChange(currentLeafletValue, prevLeafletValue),
+      totalRevenueChange: calculatePercentageChange(
+        currentBookingValue + currentLeafletValue, 
+        prevBookingValue + prevLeafletValue
+      )
     });
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
