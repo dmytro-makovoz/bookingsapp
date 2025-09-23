@@ -12,6 +12,7 @@ import Customers from './pages/Customers';
 import Settings from './pages/Settings';
 import Bookings from './pages/Bookings';
 import NewBooking from './pages/NewBooking';
+import EditBooking from './pages/EditBooking';
 import LeafletDelivery from './pages/LeafletDelivery';
 import Reports from './pages/Reports';
 import UserProfile from './pages/UserProfile';
@@ -56,6 +57,11 @@ function App() {
               <Route path="/bookings/new" element={
                 <ProtectedRoute>
                   <NewBooking />
+                </ProtectedRoute>
+              } />
+              <Route path="/bookings/edit/:id" element={
+                <ProtectedRoute>
+                  <EditBooking />
                 </ProtectedRoute>
               } />
               <Route path="/leaflet-delivery" element={

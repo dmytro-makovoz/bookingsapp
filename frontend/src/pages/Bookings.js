@@ -81,6 +81,13 @@ const Bookings = () => {
 
   const formatCurrency = (amount) => `£${amount.toLocaleString()}`;
 
+  // Calculate total space booked
+  const calculateTotalSpace = () => {
+    return filteredBookings.reduce((total, booking) => {
+      return total + (booking.contentSize?.size || 0);
+    }, 0);
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'Active':
@@ -260,12 +267,13 @@ const Bookings = () => {
                         >
                           <Eye className="h-4 w-4" />
                         </button>
-                        <button
+                        <Link
+                          to={`/bookings/edit/${booking._id}`}
                           className="p-2 text-gray-400 hover:text-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 rounded-md"
                           title="Edit Booking"
                         >
                           <Edit className="h-4 w-4" />
-                        </button>
+                        </Link>
                         <button
                           onClick={() => handleDelete(booking._id)}
                           className="p-2 text-gray-400 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-md"
@@ -307,7 +315,7 @@ const Bookings = () => {
         {/* Summary */}
         {filteredBookings.length > 0 && (
           <div className="mt-6 bg-gray-50 rounded-lg p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-center">
               <div>
                 <p className="text-2xl font-semibold text-gray-900">
                   {filteredBookings.length}
@@ -319,6 +327,12 @@ const Bookings = () => {
                   {formatCurrency(filteredBookings.reduce((sum, booking) => sum + booking.netValue, 0))}
                 </p>
                 <p className="text-sm text-gray-600">Total Value</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {calculateTotalSpace().toFixed(3)}
+                </p>
+                <p className="text-sm text-gray-600">Total Space Booked</p>
               </div>
               <div>
                 <p className="text-2xl font-semibold text-gray-900">
