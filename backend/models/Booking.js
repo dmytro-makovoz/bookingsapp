@@ -89,22 +89,32 @@ bookingSchema.index({ createdBy: 1 });
 
 // Pre-save middleware to calculate net value
 bookingSchema.pre('save', function(next) {
-  let discountAmount = 0;
-  
-  // Apply percentage discount
-  if (this.discountPercentage > 0) {
-    discountAmount += (this.basePrice * this.discountPercentage) / 100;
+  try {
+    // Ensure all values are properly converted to numbers
+    const basePrice = Number(this.basePrice) || 0;
+    const discountPercentage = Number(this.discountPercentage) || 0;
+    const discountValue = Number(this.discountValue) || 0;
+    const additionalCharges = Number(this.additionalCharges) || 0;
+    
+    let discountAmount = 0;
+    
+    // Apply percentage discount
+    if (discountPercentage > 0) {
+      discountAmount += (basePrice * discountPercentage) / 100;
+    }
+    
+    // Apply value discount
+    if (discountValue > 0) {
+      discountAmount += discountValue;
+    }
+    
+    // Calculate net value
+    this.netValue = Math.max(0, basePrice - discountAmount + additionalCharges);
+    
+    next();
+  } catch (error) {
+    next(error);
   }
-  
-  // Apply value discount
-  if (this.discountValue > 0) {
-    discountAmount += this.discountValue;
-  }
-  
-  // Calculate net value
-  this.netValue = Math.max(0, this.basePrice - discountAmount + (this.additionalCharges || 0));
-  
-  next();
 });
 
 module.exports = mongoose.model('Booking', bookingSchema); 

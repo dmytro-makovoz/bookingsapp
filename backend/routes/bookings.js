@@ -36,7 +36,14 @@ router.get('/', auth, async (req, res) => {
     if (status) filter.status = status;
 
     const bookings = await Booking.find(filter)
-      .populate('customer', 'name businessCategory')
+      .populate('customer', 'name')
+      .populate({
+        path: 'customer',
+        populate: {
+          path: 'businessTypes',
+          select: 'section'
+        }
+      })
       .populate('magazines', 'name')
       .populate('contentSize', 'description size')
       .sort({ createdAt: -1 });
@@ -55,7 +62,14 @@ router.get('/:id', auth, async (req, res) => {
       _id: req.params.id, 
       createdBy: req.user.id 
     })
-      .populate('customer', 'name businessCategory')
+      .populate('customer', 'name')
+      .populate({
+        path: 'customer',
+        populate: {
+          path: 'businessTypes',
+          select: 'section'
+        }
+      })
       .populate('magazines', 'name')
       .populate('contentSize', 'description size');
     
@@ -101,7 +115,8 @@ router.post('/', [
       firstIssue,
       lastIssue,
       isOngoing = false,
-      note
+      note,
+      netValue
     } = req.body;
 
     // Verify customer, content size, and magazines belong to the user
@@ -128,22 +143,30 @@ router.post('/', [
       contentSize,
       magazines,
       contentType,
-      basePrice,
-      discountPercentage,
-      discountValue,
-      additionalCharges,
+      basePrice: Number(basePrice),
+      discountPercentage: Number(discountPercentage),
+      discountValue: Number(discountValue),
+      additionalCharges: Number(additionalCharges),
       firstIssue,
       lastIssue: isOngoing ? null : lastIssue,
       isOngoing,
       note,
-      createdBy: req.user.id
+      createdBy: req.user.id,
+      netValue
     });
 
     await booking.save();
     
     // Populate the response
     await booking.populate([
-      { path: 'customer', select: 'name businessCategory' },
+      { 
+        path: 'customer', 
+        select: 'name',
+        populate: {
+          path: 'businessTypes',
+          select: 'section'
+        }
+      },
       { path: 'magazines', select: 'name' },
       { path: 'contentSize', select: 'description size' }
     ]);
@@ -215,10 +238,10 @@ router.put('/:id', [
     booking.contentSize = contentSize;
     booking.magazines = magazines;
     booking.contentType = contentType;
-    booking.basePrice = basePrice;
-    booking.discountPercentage = discountPercentage;
-    booking.discountValue = discountValue;
-    booking.additionalCharges = additionalCharges;
+    booking.basePrice = Number(basePrice);
+    booking.discountPercentage = Number(discountPercentage);
+    booking.discountValue = Number(discountValue);
+    booking.additionalCharges = Number(additionalCharges);
     booking.firstIssue = firstIssue;
     booking.lastIssue = isOngoing ? null : lastIssue;
     booking.isOngoing = isOngoing;
@@ -229,7 +252,14 @@ router.put('/:id', [
     
     // Populate the response
     await booking.populate([
-      { path: 'customer', select: 'name businessCategory' },
+      { 
+        path: 'customer', 
+        select: 'name',
+        populate: {
+          path: 'businessTypes',
+          select: 'section'
+        }
+      },
       { path: 'magazines', select: 'name' },
       { path: 'contentSize', select: 'description size' }
     ]);
@@ -277,6 +307,14 @@ router.get('/customer/:customerId', auth, async (req, res) => {
       customer: req.params.customerId,
       createdBy: req.user.id 
     })
+      .populate('customer', 'name')
+      .populate({
+        path: 'customer',
+        populate: {
+          path: 'businessTypes',
+          select: 'section'
+        }
+      })
       .populate('magazines', 'name')
       .populate('contentSize', 'description size')
       .sort({ firstIssue: 1 });
@@ -322,7 +360,14 @@ router.get('/report/data', auth, async (req, res) => {
     }
 
     const bookings = await Booking.find(filter)
-      .populate('customer', 'name businessCategory')
+      .populate('customer', 'name')
+      .populate({
+        path: 'customer',
+        populate: {
+          path: 'businessTypes',
+          select: 'section'
+        }
+      })
       .populate('magazines', 'name')
       .populate('contentSize', 'description size')
       .sort({ 'customer.name': 1, firstIssue: 1 });
