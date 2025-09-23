@@ -128,6 +128,31 @@ const BookingDashboard = () => {
             change="+8%"
           />
           <StatCard
+            title="Leaflet Deliveries"
+            value={dashboardStats.totalLeafletDeliveries || 0}
+            icon={Truck}
+            color="text-orange-600"
+            change="+5%"
+          />
+        </div>
+
+        {/* Revenue Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <StatCard
+            title="Booking Revenue"
+            value={formatCurrency(dashboardStats.totalBookingValue || 0)}
+            icon={DollarSign}
+            color="text-green-600"
+            change="+12%"
+          />
+          <StatCard
+            title="Leaflet Revenue"
+            value={formatCurrency(dashboardStats.totalLeafletValue || 0)}
+            icon={Truck}
+            color="text-blue-600"
+            change="+18%"
+          />
+          <StatCard
             title="Total Revenue"
             value={formatCurrency(dashboardStats.totalRevenue || 0)}
             icon={DollarSign}
@@ -318,13 +343,20 @@ const BookingDashboard = () => {
         {/* Quick Actions */}
         <div className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <a
               href="/bookings/new"
               className="flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <FileText className="h-4 w-4 mr-2" />
               New Booking
+            </a>
+            <a
+              href="/leaflet-delivery"
+              className="flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+            >
+              <Truck className="h-4 w-4 mr-2" />
+              Leaflet Delivery
             </a>
             <a
               href="/customers"

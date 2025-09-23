@@ -28,7 +28,7 @@ router.get('/stats', auth, async (req, res) => {
       ]),
       LeafletDelivery.aggregate([
         { $match: { createdBy: req.user.id, status: 'Active' } },
-        { $group: { _id: null, total: { $sum: '$netValue' } } }
+        { $group: { _id: null, total: { $sum: '$charge' } } }
       ])
     ]);
 
@@ -298,8 +298,8 @@ router.get('/recent-activity', auth, async (req, res) => {
         type: 'leaflet',
         id: delivery._id,
         customerName: delivery.customer.name,
-        description: `${delivery.leafletDescription} (${delivery.quantity}x) in ${delivery.magazine.name}`,
-        value: delivery.netValue,
+        description: `Leaflet delivery (${delivery.quantity}x) in ${delivery.magazine.name}`,
+        value: delivery.charge,
         createdAt: delivery.createdAt
       }))
     ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 10);

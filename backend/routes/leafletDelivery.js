@@ -9,13 +9,13 @@ const { body, validationResult } = require('express-validator');
 // Get all leaflet deliveries for the authenticated user
 router.get('/', auth, async (req, res) => {
   try {
-    const { customer, magazine, issue, status } = req.query;
+    const { customer, magazine, startIssue, status } = req.query;
     
     let filter = { createdBy: req.user.id };
     
     if (customer) filter.customer = customer;
     if (magazine) filter.magazine = magazine;
-    if (issue) filter.issue = issue;
+    if (startIssue) filter.startIssue = startIssue;
     if (status) filter.status = status;
 
     const leafletDeliveries = await LeafletDelivery.find(filter)
@@ -56,13 +56,10 @@ router.post('/', [
   auth,
   body('customer').notEmpty().withMessage('Customer is required'),
   body('magazine').notEmpty().withMessage('Magazine is required'),
-  body('issue').trim().notEmpty().withMessage('Issue is required'),
-  body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
-  body('leafletDescription').trim().notEmpty().withMessage('Leaflet description is required'),
+  body('startIssue').trim().notEmpty().withMessage('Start issue is required'),
+  body('finishIssue').trim().notEmpty().withMessage('Finish issue is required'),
   body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-  body('discountPercentage').optional().isFloat({ min: 0, max: 100 }),
-  body('discountValue').optional().isFloat({ min: 0 }),
-  body('additionalCharges').optional().isFloat({ min: 0 })
+  body('charge').isFloat({ min: 0 }).withMessage('Charge must be a positive number')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -73,13 +70,10 @@ router.post('/', [
     const {
       customer,
       magazine,
-      issue,
-      price,
-      leafletDescription,
+      startIssue,
+      finishIssue,
       quantity,
-      discountPercentage = 0,
-      discountValue = 0,
-      additionalCharges = 0,
+      charge,
       note
     } = req.body;
 
@@ -100,13 +94,10 @@ router.post('/', [
     const leafletDelivery = new LeafletDelivery({
       customer,
       magazine,
-      issue,
-      price,
-      leafletDescription,
+      startIssue,
+      finishIssue,
       quantity,
-      discountPercentage,
-      discountValue,
-      additionalCharges,
+      charge,
       note,
       createdBy: req.user.id
     });
@@ -131,13 +122,10 @@ router.put('/:id', [
   auth,
   body('customer').notEmpty().withMessage('Customer is required'),
   body('magazine').notEmpty().withMessage('Magazine is required'),
-  body('issue').trim().notEmpty().withMessage('Issue is required'),
-  body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
-  body('leafletDescription').trim().notEmpty().withMessage('Leaflet description is required'),
+  body('startIssue').trim().notEmpty().withMessage('Start issue is required'),
+  body('finishIssue').trim().notEmpty().withMessage('Finish issue is required'),
   body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-  body('discountPercentage').optional().isFloat({ min: 0, max: 100 }),
-  body('discountValue').optional().isFloat({ min: 0 }),
-  body('additionalCharges').optional().isFloat({ min: 0 })
+  body('charge').isFloat({ min: 0 }).withMessage('Charge must be a positive number')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -157,13 +145,10 @@ router.put('/:id', [
     const {
       customer,
       magazine,
-      issue,
-      price,
-      leafletDescription,
+      startIssue,
+      finishIssue,
       quantity,
-      discountPercentage = 0,
-      discountValue = 0,
-      additionalCharges = 0,
+      charge,
       note,
       status
     } = req.body;
@@ -181,13 +166,10 @@ router.put('/:id', [
     // Update leaflet delivery fields
     leafletDelivery.customer = customer;
     leafletDelivery.magazine = magazine;
-    leafletDelivery.issue = issue;
-    leafletDelivery.price = price;
-    leafletDelivery.leafletDescription = leafletDescription;
+    leafletDelivery.startIssue = startIssue;
+    leafletDelivery.finishIssue = finishIssue;
     leafletDelivery.quantity = quantity;
-    leafletDelivery.discountPercentage = discountPercentage;
-    leafletDelivery.discountValue = discountValue;
-    leafletDelivery.additionalCharges = additionalCharges;
+    leafletDelivery.charge = charge;
     leafletDelivery.note = note;
     if (status) leafletDelivery.status = status;
 
@@ -229,27 +211,26 @@ router.delete('/:id', auth, async (req, res) => {
 // Get leaflet delivery report data
 router.get('/report/data', auth, async (req, res) => {
   try {
-    const { magazine, issue, customer } = req.query;
+    const { magazine, startIssue, customer } = req.query;
     
     let filter = { createdBy: req.user.id };
     
     if (customer) filter.customer = customer;
     if (magazine) filter.magazine = magazine;
-    if (issue) filter.issue = issue;
+    if (startIssue) filter.startIssue = startIssue;
 
     const leafletDeliveries = await LeafletDelivery.find(filter)
       .populate('customer', 'name businessCategory')
       .populate('magazine', 'name')
-      .sort({ 'customer.name': 1, issue: 1 });
+      .sort({ 'customer.name': 1, startIssue: 1 });
 
     const reportData = leafletDeliveries.map(delivery => ({
       magazineName: delivery.magazine.name,
       customerName: delivery.customer.name,
-      issue: delivery.issue,
-      leafletDescription: delivery.leafletDescription,
+      startIssue: delivery.startIssue,
+      finishIssue: delivery.finishIssue,
       quantity: delivery.quantity,
-      netValue: delivery.netValue,
-      price: delivery.price,
+      charge: delivery.charge,
       note: delivery.note || '',
       status: delivery.status
     }));
@@ -257,7 +238,7 @@ router.get('/report/data', auth, async (req, res) => {
     res.json({
       data: reportData,
       total: reportData.length,
-      totalValue: reportData.reduce((sum, item) => sum + item.netValue, 0)
+      totalValue: reportData.reduce((sum, item) => sum + item.charge, 0)
     });
   } catch (error) {
     console.error('Error generating leaflet delivery report:', error);

@@ -11,47 +11,25 @@ const leafletDeliverySchema = new mongoose.Schema({
     ref: 'Magazine',
     required: true
   },
-  issue: {
+  // Issue scheduling (like bookings)
+  startIssue: {
     type: String,
     required: true
   },
-  price: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  // Pricing adjustments
-  discountPercentage: {
-    type: Number,
-    default: 0,
-    min: 0,
-    max: 100
-  },
-  discountValue: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  additionalCharges: {
-    type: Number,
-    default: 0
-  },
-  // Calculated net value
-  netValue: {
-    type: Number,
-    required: true,
-    min: 0
+  finishIssue: {
+    type: String,
+    required: true
   },
   // Leaflet details
-  leafletDescription: {
-    type: String,
-    required: true,
-    trim: true
-  },
   quantity: {
     type: Number,
     required: true,
     min: 1
+  },
+  charge: {
+    type: Number,
+    required: true,
+    min: 0
   },
   // Optional note
   note: {
@@ -75,28 +53,8 @@ const leafletDeliverySchema = new mongoose.Schema({
 });
 
 // Create indexes for efficient querying
-leafletDeliverySchema.index({ customer: 1, issue: 1 });
-leafletDeliverySchema.index({ magazine: 1, issue: 1 });
+leafletDeliverySchema.index({ customer: 1, startIssue: 1 });
+leafletDeliverySchema.index({ magazine: 1, startIssue: 1 });
 leafletDeliverySchema.index({ createdBy: 1 });
-
-// Pre-save middleware to calculate net value
-leafletDeliverySchema.pre('save', function(next) {
-  let discountAmount = 0;
-  
-  // Apply percentage discount
-  if (this.discountPercentage > 0) {
-    discountAmount += (this.price * this.discountPercentage) / 100;
-  }
-  
-  // Apply value discount
-  if (this.discountValue > 0) {
-    discountAmount += this.discountValue;
-  }
-  
-  // Calculate net value
-  this.netValue = Math.max(0, this.price - discountAmount + (this.additionalCharges || 0));
-  
-  next();
-});
 
 module.exports = mongoose.model('LeafletDelivery', leafletDeliverySchema); 
