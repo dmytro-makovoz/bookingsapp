@@ -7,13 +7,15 @@ import {
   Plus, 
   Search, 
   Edit, 
-    Trash2,
+  Trash2,
   BookOpen,
-  Calendar,
   FileText,
   X,
   Archive,
-  ArchiveRestore
+  ArchiveRestore,
+  GripVertical,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 import { 
@@ -33,34 +35,62 @@ const magazineSchema = yup.object().shape({
       totalPages: yup.number().required('Total pages is required').min(1, 'Must be at least 1 page'),
       startDate: yup.date().required('Start date is required'),
       sortOrder: yup.number().required('Sort order is required').min(0),
+      hidden: yup.boolean()
     })
   ).min(1, 'At least one issue is required'),
 });
 
 const MagazineModal = ({ magazine, onClose, onSave }) => {
-  const { register, handleSubmit, control, formState: { errors }, reset } = useForm({
+  const { register, handleSubmit, control, formState: { errors }, reset, watch, setValue } = useForm({
     resolver: yupResolver(magazineSchema),
-    defaultValues: magazine || { issues: [{ name: '', totalPages: 40, startDate: '', sortOrder: 0 }] }
+    defaultValues: magazine || { issues: [{ name: '', totalPages: 40, startDate: '', sortOrder: 0, hidden: false }] }
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, move } = useFieldArray({
     control,
     name: 'issues'
   });
 
+  const [draggedItem, setDraggedItem] = useState(null);
+  const watchedIssues = watch('issues');
+
   const onSubmit = (data) => {
-    // Convert dates to ISO strings
+    // Convert dates to ISO strings and update sort orders based on array position
     const formattedData = {
       ...data,
-      issues: data.issues.map(issue => ({
+      issues: data.issues.map((issue, index) => ({
         ...issue,
         startDate: new Date(issue.startDate).toISOString(),
         totalPages: parseInt(issue.totalPages),
-        sortOrder: parseInt(issue.sortOrder)
+        sortOrder: index, // Use array index as sort order
+        hidden: Boolean(issue.hidden)
       }))
     };
     onSave(formattedData);
     reset();
+  };
+
+  const handleDragStart = (e, index) => {
+    setDraggedItem(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, dropIndex) => {
+    e.preventDefault();
+    if (draggedItem !== null && draggedItem !== dropIndex) {
+      move(draggedItem, dropIndex);
+    }
+    setDraggedItem(null);
+  };
+
+  const toggleHidden = (index) => {
+    const currentValue = watchedIssues[index]?.hidden || false;
+    setValue(`issues.${index}.hidden`, !currentValue);
   };
 
   useEffect(() => {
@@ -69,7 +99,8 @@ const MagazineModal = ({ magazine, onClose, onSave }) => {
         ...magazine,
         issues: magazine.issues.map(issue => ({
           ...issue,
-          startDate: new Date(issue.startDate).toISOString().split('T')[0]
+          startDate: new Date(issue.startDate).toISOString().split('T')[0],
+          hidden: issue.hidden || false
         }))
       };
       reset(formattedMagazine);
@@ -92,7 +123,7 @@ const MagazineModal = ({ magazine, onClose, onSave }) => {
               type="text"
               {...register('name')}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                  placeholder="e.g. Southampton Magazine"
+              placeholder="e.g. Mytown Magazine"
             />
             {errors.name && (
               <p className="text-red-600 text-sm mt-1">{errors.name.message}</p>
@@ -106,7 +137,7 @@ const MagazineModal = ({ magazine, onClose, onSave }) => {
               </label>
               <button
                 type="button"
-                onClick={() => append({ name: '', totalPages: 40, startDate: '', sortOrder: fields.length })}
+                onClick={() => append({ name: '', totalPages: 40, startDate: '', sortOrder: fields.length, hidden: false })}
                 className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
               >
                 <Plus className="h-4 w-4 mr-1" />
@@ -114,11 +145,41 @@ const MagazineModal = ({ magazine, onClose, onSave }) => {
               </button>
             </div>
             
+            <div className="text-xs text-gray-500 mb-2">
+              Drag issues to reorder them
+            </div>
+            
             <div className="space-y-3 max-h-60 overflow-y-auto">
               {fields.map((field, index) => (
-                <div key={field.id} className="border border-gray-200 rounded-lg p-3">
+                <div 
+                  key={field.id} 
+                  className={`border border-gray-200 rounded-lg p-3 ${
+                    watchedIssues[index]?.hidden ? 'bg-gray-50 border-dashed' : 'bg-white'
+                  }`}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, index)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, index)}
+                >
                   <div className="flex items-start justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-900">Issue {index + 1}</h4>
+                    <div className="flex items-center space-x-2">
+                      <GripVertical className="h-4 w-4 text-gray-400 cursor-move" />
+                      <button
+                        type="button"
+                        onClick={() => toggleHidden(index)}
+                        className={`p-1 rounded ${
+                          watchedIssues[index]?.hidden 
+                            ? 'text-gray-400 hover:text-gray-600' 
+                            : 'text-green-600 hover:text-green-800'
+                        }`}
+                        title={watchedIssues[index]?.hidden ? 'Show in bookings' : 'Hide from bookings'}
+                      >
+                        {watchedIssues[index]?.hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                      {watchedIssues[index]?.hidden && (
+                        <span className="text-xs text-gray-500 italic">Hidden from bookings</span>
+                      )}
+                    </div>
                     {fields.length > 1 && (
                       <button
                         type="button"
@@ -130,7 +191,7 @@ const MagazineModal = ({ magazine, onClose, onSave }) => {
                     )}
                   </div>
                   
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">
                         Issue Name
@@ -174,22 +235,12 @@ const MagazineModal = ({ magazine, onClose, onSave }) => {
                         <p className="text-red-600 text-xs mt-1">{errors.issues[index].startDate.message}</p>
                       )}
                     </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Sort Order
-                      </label>
-                      <input
-                        type="number"
-                        {...register(`issues.${index}.sortOrder`)}
-                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        min="0"
-                      />
-                      {errors.issues?.[index]?.sortOrder && (
-                        <p className="text-red-600 text-xs mt-1">{errors.issues[index].sortOrder.message}</p>
-                      )}
-                    </div>
                   </div>
+                  
+                  {/* Hidden field for sortOrder */}
+                  <input type="hidden" {...register(`issues.${index}.sortOrder`)} value={index} />
+                  {/* Hidden field for hidden status */}
+                  <input type="hidden" {...register(`issues.${index}.hidden`)} />
                 </div>
               ))}
             </div>
@@ -289,10 +340,6 @@ const Magazines = () => {
     setIsModalOpen(true);
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-
   return (
     <div>
         {/* Header */}
@@ -370,13 +417,23 @@ const Magazines = () => {
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                               {magazine.issues.length} issues
                             </span>
+                            {magazine.issues.some(issue => issue.hidden) && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                Some hidden
+                              </span>
+                            )}
                           </div>
                           <div className="mt-2">
                             <div className="flex flex-wrap gap-2">
                               {magazine.issues.slice(0, 3).map((issue, index) => (
-                                <div key={index} className="flex items-center text-xs text-gray-500 bg-gray-100 rounded-full px-2 py-1">
-                                  <Calendar className="h-3 w-3 mr-1" />
-                                  {issue.name} ({issue.totalPages}p) - {formatDate(issue.startDate)}
+                                <div key={index} className={`flex items-center text-xs rounded-full px-2 py-1 ${
+                                  issue.hidden 
+                                    ? 'text-gray-400 bg-gray-100 border border-dashed border-gray-300' 
+                                    : 'text-gray-500 bg-gray-100'
+                                }`}>
+                                  <FileText className="h-3 w-3 mr-1" />
+                                  {issue.name} ({issue.totalPages}p)
+                                  {issue.hidden && <EyeOff className="h-3 w-3 ml-1" />}
                                 </div>
                               ))}
                               {magazine.issues.length > 3 && (

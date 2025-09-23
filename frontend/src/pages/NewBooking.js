@@ -25,27 +25,40 @@ const bookingSchema = yup.object().shape({
   discountPercentage: yup.number().min(0).max(100),
   discountValue: yup.number().min(0),
   additionalCharges: yup.number().min(0),
+  netValue: yup.number().min(0),
+  isOngoing: yup.boolean(),
+  lastIssue: yup.string(),
+  note: yup.string()
 });
 
 const NewBooking = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { customers, magazines, contentSizes, loading } = useSelector((state) => state.booking);
-  const [selectedMagazines, setSelectedMagazines] = useState([]);
-  const [basePrice, setBasePrice] = useState(0);
-  const [netValue, setNetValue] = useState(0);
-  
-  const { register, handleSubmit, formState: { errors }, watch, setValue, reset } = useForm({
+  const { 
+    customers, 
+    magazines, 
+    contentSizes, 
+    loading 
+  } = useSelector((state) => state.booking);
+
+  const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm({
     resolver: yupResolver(bookingSchema),
     defaultValues: {
       discountPercentage: 0,
       discountValue: 0,
       additionalCharges: 0,
-      isOngoing: false
+      isOngoing: false,
+      netValue: 0
     }
   });
 
-  const watchedFields = watch();
+  const [selectedMagazines, setSelectedMagazines] = useState([]);
+  const [selectedContentSize, setSelectedContentSize] = useState(null);
+  const [basePrice, setBasePrice] = useState(0);
+  const [availableIssues, setAvailableIssues] = useState([]);
+
+  const watchedValues = watch();
+  const watchedContentSize = watch('contentSize');
 
   useEffect(() => {
     dispatch(fetchCustomers());
@@ -53,14 +66,42 @@ const NewBooking = () => {
     dispatch(fetchContentSizes());
   }, [dispatch]);
 
+  // Calculate available issues from selected magazines
+  useEffect(() => {
+    if (selectedMagazines.length > 0) {
+      const issues = [];
+      selectedMagazines.forEach(magazineId => {
+        const magazine = magazines.find(m => m._id === magazineId);
+        if (magazine) {
+          // Only include non-hidden issues
+          const visibleIssues = magazine.issues.filter(issue => !issue.hidden);
+          visibleIssues.forEach(issue => {
+            issues.push({
+              id: `${magazineId}_${issue.name}`,
+              name: issue.name,
+              magazineName: magazine.name,
+              displayName: `${magazine.name} - ${issue.name}`,
+              startDate: issue.startDate
+            });
+          });
+        }
+      });
+      // Sort by start date
+      issues.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+      setAvailableIssues(issues);
+    } else {
+      setAvailableIssues([]);
+    }
+  }, [selectedMagazines, magazines]);
+
   // Calculate pricing when content size or magazines change
   useEffect(() => {
     const calculatePrice = async () => {
-      if (watchedFields.contentSize && selectedMagazines.length > 0) {
+      if (watchedContentSize && selectedMagazines.length > 0) {
         try {
           // Get prices for each magazine and use the average
           const pricePromises = selectedMagazines.map(magazineId =>
-            contentSizesAPI.getPrice(watchedFields.contentSize, magazineId)
+            contentSizesAPI.getPrice(watchedContentSize, magazineId)
           );
           
           const prices = await Promise.all(pricePromises);
@@ -74,14 +115,14 @@ const NewBooking = () => {
     };
 
     calculatePrice();
-  }, [watchedFields.contentSize, selectedMagazines, setValue]);
+  }, [watchedContentSize, selectedMagazines, setValue]);
 
   // Calculate net value when pricing fields change
   useEffect(() => {
-    const discountAmount = (basePrice * (watchedFields.discountPercentage || 0)) / 100 + (watchedFields.discountValue || 0);
-    const calculated = Math.max(0, basePrice - discountAmount + (watchedFields.additionalCharges || 0));
-    setNetValue(calculated);
-  }, [basePrice, watchedFields.discountPercentage, watchedFields.discountValue, watchedFields.additionalCharges]);
+    const discountAmount = (basePrice * (watchedValues.discountPercentage || 0)) / 100 + (watchedValues.discountValue || 0);
+    const calculated = Math.max(0, basePrice - discountAmount + (watchedValues.additionalCharges || 0));
+    setValue('netValue', calculated);
+  }, [basePrice, watchedValues.discountPercentage, watchedValues.discountValue, watchedValues.additionalCharges, setValue]);
 
   const onSubmit = async (data) => {
     try {
@@ -89,7 +130,7 @@ const NewBooking = () => {
         ...data,
         magazines: selectedMagazines,
         basePrice,
-        netValue
+        netValue: data.netValue // Use the calculated netValue from the form
       };
 
       await dispatch(createBooking(bookingData)).unwrap();
@@ -102,58 +143,69 @@ const NewBooking = () => {
 
   const handleMagazineSelection = (magazineId) => {
     setSelectedMagazines(prev => {
-      if (prev.includes(magazineId)) {
-        return prev.filter(id => id !== magazineId);
-      } else {
-        return [...prev, magazineId];
-      }
+      const newSelection = prev.includes(magazineId) 
+        ? prev.filter(id => id !== magazineId)
+        : [...prev, magazineId];
+      
+      // Update the form value as well
+      setValue('magazines', newSelection);
+      return newSelection;
     });
+  };
+
+  const handleContentSizeChange = (e) => {
+    const value = e.target.value;
+    setSelectedContentSize(value);
+    setValue('contentSize', value);
   };
 
   const contentTypes = ['Advert', 'Article', 'Puzzle', 'Advertorial', 'Front Cover', 'In-house'];
 
   return (
     <Layout>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto py-8 px-4">
         {/* Header */}
         <div className="mb-8">
           <button
             onClick={() => navigate('/bookings')}
-            className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-4"
+            className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-4"
           >
             <ArrowLeft className="h-4 w-4 mr-1" />
             Back to Bookings
           </button>
-          <h1 className="text-3xl font-bold text-gray-900">New Booking</h1>
-          <p className="mt-2 text-gray-600">Create a new magazine space booking</p>
+          <h1 className="text-3xl font-bold text-gray-900">Create New Booking</h1>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {/* Customer Selection */}
           <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-6">Booking Details</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Customer */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Customer *
-                </label>
-                <select
-                  {...register('customer')}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select customer...</option>
-                  {customers.map((customer) => (
-                    <option key={customer._id} value={customer._id}>
-                      {customer.name} - {customer.businessCategory}
-                    </option>
-                  ))}
-                </select>
-                {errors.customer && (
-                  <p className="text-red-600 text-sm mt-1">{errors.customer.message}</p>
-                )}
-              </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Customer Information</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Customer *
+              </label>
+              <select
+                {...register('customer')}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Select a customer...</option>
+                {customers.map((customer) => (
+                  <option key={customer._id} value={customer._id}>
+                    {customer.name} - {customer.businessName}
+                  </option>
+                ))}
+              </select>
+              {errors.customer && (
+                <p className="text-red-600 text-sm mt-1">{errors.customer.message}</p>
+              )}
+            </div>
+          </div>
 
+          {/* Content Information */}
+          <div className="bg-white shadow rounded-lg p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Content Details</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Content Size */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -161,12 +213,13 @@ const NewBooking = () => {
                 </label>
                 <select
                   {...register('contentSize')}
+                  onChange={handleContentSizeChange}
                   className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">Select content size...</option>
                   {contentSizes.map((size) => (
                     <option key={size._id} value={size._id}>
-                      {size.description} ({size.size} pages)
+                      {size.name} ({size.width}" x {size.height}")
                     </option>
                   ))}
                 </select>
@@ -201,12 +254,17 @@ const NewBooking = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   First Issue *
                 </label>
-                <input
-                  type="text"
+                <select
                   {...register('firstIssue')}
                   className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="e.g. Nov25"
-                />
+                >
+                  <option value="">Select first issue...</option>
+                  {availableIssues.map((issue) => (
+                    <option key={issue.id} value={issue.name}>
+                      {issue.displayName}
+                    </option>
+                  ))}
+                </select>
                 {errors.firstIssue && (
                   <p className="text-red-600 text-sm mt-1">{errors.firstIssue.message}</p>
                 )}
@@ -217,12 +275,17 @@ const NewBooking = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Last Issue
                 </label>
-                <input
-                  type="text"
+                <select
                   {...register('lastIssue')}
                   className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="e.g. Dec25 (leave blank if ongoing)"
-                />
+                >
+                  <option value="">Select last issue (optional)...</option>
+                  {availableIssues.map((issue) => (
+                    <option key={issue.id} value={issue.name}>
+                      {issue.displayName}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Ongoing checkbox */}
@@ -238,6 +301,7 @@ const NewBooking = () => {
                   </label>
                 </div>
               </div>
+
             </div>
           </div>
 
@@ -245,30 +309,33 @@ const NewBooking = () => {
           <div className="bg-white shadow rounded-lg p-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Select Magazines *</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {magazines.map((magazine) => (
-                <div
-                  key={magazine._id}
-                  className={`border rounded-lg p-3 cursor-pointer transition-colors ${
-                    selectedMagazines.includes(magazine._id)
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                  onClick={() => handleMagazineSelection(magazine._id)}
-                >
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedMagazines.includes(magazine._id)}
-                      onChange={() => {}}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <div className="ml-2">
-                      <p className="text-sm font-medium text-gray-900">{magazine.name}</p>
-                      <p className="text-xs text-gray-500">{magazine.issues.length} issues</p>
+              {magazines.map((magazine) => {
+                const visibleIssuesCount = magazine.issues.filter(issue => !issue.hidden).length;
+                return (
+                  <div
+                    key={magazine._id}
+                    className={`border rounded-lg p-3 cursor-pointer transition-colors ${
+                      selectedMagazines.includes(magazine._id)
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                    onClick={() => handleMagazineSelection(magazine._id)}
+                  >
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedMagazines.includes(magazine._id)}
+                        onChange={() => {}}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <div className="ml-2">
+                        <p className="text-sm font-medium text-gray-900">{magazine.name}</p>
+                        <p className="text-xs text-gray-500">{visibleIssuesCount} available issues</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             {selectedMagazines.length === 0 && (
               <p className="text-red-600 text-sm mt-2">At least one magazine is required</p>
@@ -337,7 +404,7 @@ const NewBooking = () => {
             <div className="mt-4 p-4 bg-gray-50 rounded-lg">
               <div className="flex justify-between items-center">
                 <span className="text-sm font-medium text-gray-700">Net Value:</span>
-                <span className="text-lg font-bold text-gray-900">£{netValue.toFixed(2)}</span>
+                <span className="text-lg font-bold text-gray-900">£{(watchedValues.netValue || 0).toFixed(2)}</span>
               </div>
             </div>
           </div>

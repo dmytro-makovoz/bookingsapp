@@ -19,6 +19,11 @@ const issueSchema = new mongoose.Schema({
   sortOrder: {
     type: Number,
     required: true
+  },
+  // Hide from booking selection
+  hidden: {
+    type: Boolean,
+    default: false
   }
 });
 

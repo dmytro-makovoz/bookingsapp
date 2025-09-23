@@ -49,7 +49,8 @@ router.post('/', [
   body('issues.*.name').trim().notEmpty().withMessage('Issue name is required'),
   body('issues.*.totalPages').isInt({ min: 1 }).withMessage('Total pages must be at least 1'),
   body('issues.*.startDate').isISO8601().withMessage('Valid start date is required'),
-  body('issues.*.sortOrder').isInt({ min: 0 }).withMessage('Sort order must be a number')
+  body('issues.*.sortOrder').isInt({ min: 0 }).withMessage('Sort order must be a number'),
+  body('issues.*.hidden').optional().isBoolean().withMessage('Hidden must be a boolean')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -91,7 +92,8 @@ router.put('/:id', [
   body('issues.*.name').trim().notEmpty().withMessage('Issue name is required'),
   body('issues.*.totalPages').isInt({ min: 1 }).withMessage('Total pages must be at least 1'),
   body('issues.*.startDate').isISO8601().withMessage('Valid start date is required'),
-  body('issues.*.sortOrder').isInt({ min: 0 }).withMessage('Sort order must be a number')
+  body('issues.*.sortOrder').isInt({ min: 0 }).withMessage('Sort order must be a number'),
+  body('issues.*.hidden').optional().isBoolean().withMessage('Hidden must be a boolean')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);

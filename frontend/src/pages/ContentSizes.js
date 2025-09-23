@@ -9,7 +9,6 @@ import {
   Edit, 
   Trash2, 
   Layers,
-  DollarSign,
   X,
   Archive,
   ArchiveRestore
@@ -38,13 +37,28 @@ const contentSizeSchema = yup.object().shape({
 
 const ContentSizeModal = ({ contentSize, onClose, onSave }) => {
   const { magazines } = useSelector((state) => state.booking);
+  
+  // Format contentSize data for editing to ensure magazine IDs are used
+  const formatContentSizeForEdit = (cs) => {
+    if (!cs) return { 
+      description: '', 
+      size: '', 
+      pricing: [{ magazine: '', price: '' }] 
+    };
+    
+    return {
+      ...cs,
+      pricing: cs.pricing.map(p => ({
+        ...p,
+        // Extract magazine ID from populated magazine object if needed
+        magazine: typeof p.magazine === 'object' ? p.magazine._id : p.magazine
+      }))
+    };
+  };
+
   const { register, handleSubmit, control, formState: { errors }, reset, watch } = useForm({
     resolver: yupResolver(contentSizeSchema),
-    defaultValues: contentSize || { 
-      description: '', 
-      size: 0.25, 
-      pricing: [{ magazine: '', price: 50 }] 
-    }
+    defaultValues: formatContentSizeForEdit(contentSize)
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -66,7 +80,7 @@ const ContentSizeModal = ({ contentSize, onClose, onSave }) => {
   };
 
   useEffect(() => {
-    reset(contentSize || { description: '', size: 0.25, pricing: [{ magazine: '', price: 50 }] });
+    reset(formatContentSizeForEdit(contentSize));
   }, [contentSize, reset]);
 
   const availableMagazines = magazines.filter(mag => 
@@ -122,7 +136,7 @@ const ContentSizeModal = ({ contentSize, onClose, onSave }) => {
               {availableMagazines.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => append({ magazine: '', price: 50 })}
+                  onClick={() => append({ magazine: '', price: '' })}
                   className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
                 >
                   <Plus className="h-4 w-4 mr-1" />
@@ -376,7 +390,6 @@ const ContentSizes = () => {
                             <div className="flex flex-wrap gap-2">
                               {contentSize.pricing.map((pricing, index) => (
                                 <div key={index} className="flex items-center text-xs text-gray-600 bg-green-50 rounded-full px-2 py-1">
-                                  <DollarSign className="h-3 w-3 mr-1" />
                                   {getMagazineName(pricing.magazine)}: £{pricing.price}
                                 </div>
                               ))}
