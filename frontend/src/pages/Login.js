@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -21,7 +21,11 @@ const schema = yup.object({
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
+
+  // Get the return URL from location state
+  const from = location.state?.from?.pathname || '/dashboard';
 
   const { user, isLoading, isError, isSuccess, message } = useSelector(
     (state) => state.auth
@@ -44,7 +48,7 @@ const Login = () => {
 
     if (isSuccess && user) {
       showWelcomeToast(user.name);
-      navigate('/dashboard');
+      navigate(from, { replace: true });
     }
 
     dispatch(reset());

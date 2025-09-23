@@ -1,9 +1,10 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
+import { isTokenExpired, clearAuthData } from '../../utils/auth';
 
 // Configure axios defaults
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/auth';
-
+// const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/auth';
+const API_URL = process.env.REACT_APP_API_URL || 'https://adbooker.co.uk/api/auth';
 // Get user from localStorage
 const user = JSON.parse(localStorage.getItem('user'));
 const token = localStorage.getItem('token');
@@ -16,6 +17,31 @@ const initialState = {
   isSuccess: false,
   message: '',
 };
+
+// Check stored auth data on app load
+export const checkAuth = createAsyncThunk(
+  'auth/checkAuth',
+  async (_, thunkAPI) => {
+    try {
+      const token = localStorage.getItem('token');
+      const user = JSON.parse(localStorage.getItem('user'));
+
+      if (!token || !user) {
+        return thunkAPI.rejectWithValue('No auth data found');
+      }
+
+      if (isTokenExpired(token)) {
+        clearAuthData();
+        return thunkAPI.rejectWithValue('Token expired');
+      }
+
+      return { user, token };
+    } catch (error) {
+      clearAuthData();
+      return thunkAPI.rejectWithValue('Auth check failed');
+    }
+  }
+);
 
 // Register user
 export const register = createAsyncThunk(
@@ -139,6 +165,19 @@ export const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase(checkAuth.pending, (state) => {
+        state.isLoading = true;
+      })
+      .addCase(checkAuth.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload.user;
+        state.token = action.payload.token;
+      })
+      .addCase(checkAuth.rejected, (state) => {
+        state.isLoading = false;
+        state.user = null;
+        state.token = null;
+      })
       .addCase(register.pending, (state) => {
         state.isLoading = true;
       })

@@ -70,11 +70,11 @@ const Layout = ({ children }) => {
               <h1 className="text-2xl font-bold text-gray-900">BookingApp</h1>
             </div>
             <nav className="mt-5 flex-1 px-2 space-y-1">
-              {navigation.map((item) => {
+              {navigation.map((item, index) => {
                 const Icon = item.icon;
                 return (
                   <Link
-                    key={item.name}
+                    key={`${item.name}_${index}`}
                     to={item.href}
                     className={`${
                       isActive(item.href)
