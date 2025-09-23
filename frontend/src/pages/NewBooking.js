@@ -205,7 +205,7 @@ const NewBooking = () => {
                   type="text"
                   {...register('firstIssue')}
                   className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., Nov25"
+                                        placeholder="e.g. Nov25"
                 />
                 {errors.firstIssue && (
                   <p className="text-red-600 text-sm mt-1">{errors.firstIssue.message}</p>
@@ -221,7 +221,7 @@ const NewBooking = () => {
                   type="text"
                   {...register('lastIssue')}
                   className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., Dec25 (leave blank if ongoing)"
+                                        placeholder="e.g. Dec25 (leave blank if ongoing)"
                 />
               </div>
 

@@ -10,9 +10,11 @@ import {
   Trash2, 
   Layers,
   DollarSign,
-  X
+  X,
+  Archive,
+  ArchiveRestore
 } from 'lucide-react';
-import Layout from '../components/Layout';
+
 import { 
   fetchContentSizes, 
   fetchMagazines,
@@ -88,7 +90,7 @@ const ContentSizeModal = ({ contentSize, onClose, onSave }) => {
                 type="text"
                 {...register('description')}
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="e.g., Quarter Page, Half Page"
+                                    placeholder="e.g. Quarter Page, Half Page"
               />
               {errors.description && (
                 <p className="text-red-600 text-sm mt-1">{errors.description.message}</p>
@@ -104,7 +106,7 @@ const ContentSizeModal = ({ contentSize, onClose, onSave }) => {
                 step="0.001"
                 {...register('size')}
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="e.g., 0.25, 0.5, 1.0"
+                                    placeholder="e.g. 0.25, 0.5, 1.0"
               />
               {errors.size && (
                 <p className="text-red-600 text-sm mt-1">{errors.size.message}</p>
@@ -175,7 +177,7 @@ const ContentSizeModal = ({ contentSize, onClose, onSave }) => {
                         step="0.01"
                         {...register(`pricing.${index}.price`)}
                         className="block w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="e.g., 50.00"
+                        placeholder="e.g. 50.00"
                       />
                       {errors.pricing?.[index]?.price && (
                         <p className="text-red-600 text-xs mt-1">{errors.pricing[index].price.message}</p>
@@ -218,11 +220,12 @@ const ContentSizes = () => {
   const [editingContentSize, setEditingContentSize] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredContentSizes, setFilteredContentSizes] = useState([]);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
-    dispatch(fetchContentSizes());
+    dispatch(fetchContentSizes(showArchived));
     dispatch(fetchMagazines());
-  }, [dispatch]);
+  }, [dispatch, showArchived]);
 
   useEffect(() => {
     if (searchTerm) {
@@ -266,6 +269,16 @@ const ContentSizes = () => {
     }
   };
 
+  const handleArchiveToggle = async (contentSize) => {
+    try {
+      const response = await contentSizesAPI.archive(contentSize._id, !contentSize.archived);
+      dispatch(updateContentSize(response.data));
+      toast.success(`Content size ${contentSize.archived ? 'unarchived' : 'archived'} successfully`);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'An error occurred');
+    }
+  };
+
   const openModal = (contentSize = null) => {
     setEditingContentSize(contentSize);
     setIsModalOpen(true);
@@ -277,8 +290,7 @@ const ContentSizes = () => {
   };
 
   return (
-    <Layout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div>
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Content Sizes</h1>
@@ -287,20 +299,37 @@ const ContentSizes = () => {
 
         {/* Actions Bar */}
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-          <div className="flex-1 max-w-lg">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-400" />
+          <div className="flex items-center space-x-4">
+            <div className="flex-1 max-w-lg">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search content sizes..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                />
               </div>
+            </div>
+            
+            {/* Archive Toggle */}
+            <div className="flex items-center space-x-2">
               <input
-                type="text"
-                placeholder="Search content sizes..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                type="checkbox"
+                id="showArchived"
+                checked={showArchived}
+                onChange={(e) => setShowArchived(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
+              <label htmlFor="showArchived" className="text-sm text-gray-700">
+                Show archived
+              </label>
             </div>
           </div>
+          
           <button
             onClick={() => openModal()}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -331,9 +360,14 @@ const ContentSizes = () => {
                         </div>
                         <div className="ml-4 min-w-0 flex-1">
                           <div className="flex items-center space-x-2">
-                            <p className="text-sm font-medium text-gray-900 truncate">
+                            <p className={`text-sm font-medium truncate ${contentSize.archived ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
                               {contentSize.description}
                             </p>
+                            {contentSize.archived && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                                Archived
+                              </span>
+                            )}
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
                               {contentSize.size} pages
                             </span>
@@ -351,6 +385,17 @@ const ContentSizes = () => {
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleArchiveToggle(contentSize)}
+                          className={`p-2 focus:outline-none focus:ring-2 rounded-md ${
+                            contentSize.archived 
+                              ? 'text-gray-400 hover:text-green-600 focus:ring-green-500' 
+                              : 'text-gray-400 hover:text-yellow-600 focus:ring-yellow-500'
+                          }`}
+                          title={contentSize.archived ? 'Unarchive' : 'Archive'}
+                        >
+                          {contentSize.archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                        </button>
                         <button
                           onClick={() => openModal(contentSize)}
                           className="p-2 text-gray-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md"
@@ -402,8 +447,7 @@ const ContentSizes = () => {
             onSave={handleSave}
           />
         )}
-      </div>
-    </Layout>
+    </div>
   );
 };
 

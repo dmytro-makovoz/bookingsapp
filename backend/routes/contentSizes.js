@@ -8,7 +8,14 @@ const { body, validationResult } = require('express-validator');
 // Get all content sizes for the authenticated user
 router.get('/', auth, async (req, res) => {
   try {
-    const contentSizes = await ContentSize.find({ createdBy: req.user.id })
+    const includeArchived = req.query.includeArchived === 'true';
+    const filter = { createdBy: req.user.id };
+    
+    if (!includeArchived) {
+      filter.archived = { $ne: true };
+    }
+    
+    const contentSizes = await ContentSize.find(filter)
       .populate('pricing.magazine', 'name')
       .sort({ size: 1 });
     res.json(contentSizes);
@@ -174,6 +181,31 @@ router.get('/:contentSizeId/price/:magazineId', auth, async (req, res) => {
     res.json({ price: pricing.price });
   } catch (error) {
     console.error('Error getting price:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Archive/Unarchive a content size
+router.patch('/:id/archive', auth, async (req, res) => {
+  try {
+    const { archived } = req.body;
+    
+    const contentSize = await ContentSize.findOne({ 
+      _id: req.params.id, 
+      createdBy: req.user.id 
+    });
+    
+    if (!contentSize) {
+      return res.status(404).json({ message: 'Content size not found' });
+    }
+    
+    contentSize.archived = archived;
+    await contentSize.save();
+    
+    await contentSize.populate('pricing.magazine', 'name');
+    res.json(contentSize);
+  } catch (error) {
+    console.error('Error updating content size archive status:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

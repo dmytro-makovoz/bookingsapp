@@ -9,9 +9,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import BookingDashboard from './pages/BookingDashboard';
 import Customers from './pages/Customers';
-import BusinessTypes from './pages/BusinessTypes';
-import Magazines from './pages/Magazines';
-import ContentSizes from './pages/ContentSizes';
+import Settings from './pages/Settings';
 import Bookings from './pages/Bookings';
 import NewBooking from './pages/NewBooking';
 import LeafletDelivery from './pages/LeafletDelivery';
@@ -45,19 +43,9 @@ function App() {
                   <Customers />
                 </ProtectedRoute>
               } />
-              <Route path="/business-types" element={
+              <Route path="/settings" element={
                 <ProtectedRoute>
-                  <BusinessTypes />
-                </ProtectedRoute>
-              } />
-              <Route path="/magazines" element={
-                <ProtectedRoute>
-                  <Magazines />
-                </ProtectedRoute>
-              } />
-              <Route path="/content-sizes" element={
-                <ProtectedRoute>
-                  <ContentSizes />
+                  <Settings />
                 </ProtectedRoute>
               } />
               <Route path="/bookings" element={

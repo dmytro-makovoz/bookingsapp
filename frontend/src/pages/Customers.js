@@ -64,7 +64,7 @@ const CustomerModal = ({ customer, businessTypes, onClose, onSave }) => {
               type="text"
               {...register('name')}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              placeholder="e.g., JP Plumbing"
+                                  placeholder="e.g. JP Plumbing"
             />
             {errors.name && (
               <p className="text-red-600 text-sm mt-1">{errors.name.message}</p>
@@ -115,7 +115,7 @@ const CustomerModal = ({ customer, businessTypes, onClose, onSave }) => {
               {...register('bookingNote')}
               rows={3}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              placeholder="e.g., Must go in first 11 pages"
+                                  placeholder="e.g. Must go in first 11 pages"
             />
           </div>
 

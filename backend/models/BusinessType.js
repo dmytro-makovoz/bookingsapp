@@ -6,6 +6,10 @@ const businessTypeSchema = new mongoose.Schema({
     required: true,
     trim: true,
     unique: true
+  },
+  archived: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

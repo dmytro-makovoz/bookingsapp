@@ -7,7 +7,9 @@ const { body, validationResult } = require('express-validator');
 // Get all business types
 router.get('/', auth, async (req, res) => {
   try {
-    const businessTypes = await BusinessType.find().sort({ section: 1 });
+    const includeArchived = req.query.includeArchived === 'true';
+    const filter = includeArchived ? {} : { archived: { $ne: true } };
+    const businessTypes = await BusinessType.find(filter).sort({ section: 1 });
     res.json(businessTypes);
   } catch (error) {
     console.error('Error fetching business types:', error);
@@ -137,13 +139,41 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
+// Archive/Unarchive a business type
+router.patch('/:id/archive', auth, async (req, res) => {
+  try {
+    const { archived } = req.body;
+    
+    const businessType = await BusinessType.findById(req.params.id);
+    
+    if (!businessType) {
+      return res.status(404).json({ message: 'Business type not found' });
+    }
+    
+    businessType.archived = archived;
+    await businessType.save();
+    
+    res.json(businessType);
+  } catch (error) {
+    console.error('Error updating business type archive status:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Search business types
 router.get('/search/:query', auth, async (req, res) => {
   try {
     const searchQuery = req.params.query;
-    const businessTypes = await BusinessType.find({
+    const includeArchived = req.query.includeArchived === 'true';
+    const filter = {
       section: { $regex: searchQuery, $options: 'i' }
-    }).sort({ section: 1 });
+    };
+    
+    if (!includeArchived) {
+      filter.archived = { $ne: true };
+    }
+    
+    const businessTypes = await BusinessType.find(filter).sort({ section: 1 });
     
     res.json(businessTypes);
   } catch (error) {

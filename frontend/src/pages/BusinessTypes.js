@@ -9,9 +9,10 @@ import {
   Edit, 
   Trash2, 
   Building2,
-  Tag
+  Tag,
+  Archive,
+  ArchiveRestore
 } from 'lucide-react';
-import Layout from '../components/Layout';
 import { 
   fetchBusinessTypes, 
   addBusinessType,
@@ -56,7 +57,7 @@ const BusinessTypeModal = ({ businessType, onClose, onSave }) => {
               type="text"
               {...register('section')}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              placeholder="e.g., Restaurant & Food Service"
+                                  placeholder="e.g. Restaurant & Food Service"
             />
             {errors.section && (
               <p className="text-red-600 text-sm mt-1">{errors.section.message}</p>
@@ -91,10 +92,11 @@ const BusinessTypes = () => {
   const [editingBusinessType, setEditingBusinessType] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredBusinessTypes, setFilteredBusinessTypes] = useState([]);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
-    dispatch(fetchBusinessTypes());
-  }, [dispatch]);
+    dispatch(fetchBusinessTypes(showArchived));
+  }, [dispatch, showArchived]);
 
   useEffect(() => {
     if (searchTerm) {
@@ -138,22 +140,32 @@ const BusinessTypes = () => {
     }
   };
 
+  const handleArchiveToggle = async (businessType) => {
+    try {
+      const response = await businessTypesAPI.archive(businessType._id, !businessType.archived);
+      dispatch(updateBusinessType(response.data));
+      toast.success(`Business type ${businessType.archived ? 'unarchived' : 'archived'} successfully`);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'An error occurred');
+    }
+  };
+
   const openModal = (businessType = null) => {
     setEditingBusinessType(businessType);
     setIsModalOpen(true);
   };
 
   return (
-    <Layout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Business Types</h1>
-          <p className="mt-2 text-gray-600">Manage business type categories for customer classification</p>
-        </div>
+    <div>
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Business Types</h1>
+        <p className="mt-2 text-gray-600">Manage business type categories for customer classification</p>
+      </div>
 
-        {/* Actions Bar */}
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+      {/* Actions Bar */}
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+        <div className="flex items-center space-x-4">
           <div className="flex-1 max-w-lg">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -168,14 +180,30 @@ const BusinessTypes = () => {
               />
             </div>
           </div>
-          <button
-            onClick={() => openModal()}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Business Type
-          </button>
+          
+          {/* Archive Toggle */}
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="showArchived"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="showArchived" className="text-sm text-gray-700">
+              Show archived
+            </label>
+          </div>
         </div>
+        
+        <button
+          onClick={() => openModal()}
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Business Type
+        </button>
+      </div>
 
         {/* Business Types List */}
         {loading.businessTypes ? (
@@ -198,9 +226,14 @@ const BusinessTypes = () => {
                         </div>
                         <div className="ml-4 min-w-0 flex-1">
                           <div className="flex items-center space-x-2">
-                            <p className="text-sm font-medium text-gray-900 truncate">
+                            <p className={`text-sm font-medium truncate ${businessType.archived ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
                               {businessType.section}
                             </p>
+                            {businessType.archived && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                                Archived
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center mt-1 text-sm text-gray-500">
                             <Tag className="h-4 w-4 mr-1" />
@@ -209,6 +242,17 @@ const BusinessTypes = () => {
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleArchiveToggle(businessType)}
+                          className={`p-2 focus:outline-none focus:ring-2 rounded-md ${
+                            businessType.archived 
+                              ? 'text-gray-400 hover:text-green-600 focus:ring-green-500' 
+                              : 'text-gray-400 hover:text-yellow-600 focus:ring-yellow-500'
+                          }`}
+                          title={businessType.archived ? 'Unarchive' : 'Archive'}
+                        >
+                          {businessType.archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                        </button>
                         <button
                           onClick={() => openModal(businessType)}
                           className="p-2 text-gray-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md"
@@ -260,8 +304,7 @@ const BusinessTypes = () => {
             onSave={handleSave}
           />
         )}
-      </div>
-    </Layout>
+    </div>
   );
 };
 

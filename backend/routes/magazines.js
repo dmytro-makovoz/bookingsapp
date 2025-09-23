@@ -7,7 +7,14 @@ const { body, validationResult } = require('express-validator');
 // Get all magazines for the authenticated user
 router.get('/', auth, async (req, res) => {
   try {
-    const magazines = await Magazine.find({ createdBy: req.user.id }).sort({ name: 1 });
+    const includeArchived = req.query.includeArchived === 'true';
+    const filter = { createdBy: req.user.id };
+    
+    if (!includeArchived) {
+      filter.archived = { $ne: true };
+    }
+    
+    const magazines = await Magazine.find(filter).sort({ name: 1 });
     res.json(magazines);
   } catch (error) {
     console.error('Error fetching magazines:', error);
@@ -193,6 +200,30 @@ router.get('/current-issue/:magazineId', auth, async (req, res) => {
     res.json({ magazine: magazine.name, currentIssue });
   } catch (error) {
     console.error('Error getting current issue:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Archive/Unarchive a magazine
+router.patch('/:id/archive', auth, async (req, res) => {
+  try {
+    const { archived } = req.body;
+    
+    const magazine = await Magazine.findOne({ 
+      _id: req.params.id, 
+      createdBy: req.user.id 
+    });
+    
+    if (!magazine) {
+      return res.status(404).json({ message: 'Magazine not found' });
+    }
+    
+    magazine.archived = archived;
+    await magazine.save();
+    
+    res.json(magazine);
+  } catch (error) {
+    console.error('Error updating magazine archive status:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

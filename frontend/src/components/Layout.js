@@ -38,13 +38,11 @@ const Layout = ({ children }) => {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Customers', href: '/customers', icon: Users },
-    { name: 'Business Types', href: '/business-types', icon: Settings },
-    { name: 'Magazines', href: '/magazines', icon: BookOpen },
-    { name: 'Content Sizes', href: '/content-sizes', icon: Layers },
     { name: 'New Booking', href: '/bookings/new', icon: PlusCircle },
     { name: 'Bookings', href: '/bookings', icon: FileText },
     { name: 'Leaflet Delivery', href: '/leaflet-delivery', icon: Truck },
     { name: 'Reports', href: '/reports', icon: BarChart3 },
+    { name: 'Settings', href: '/settings', icon: Settings },
   ];
 
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');

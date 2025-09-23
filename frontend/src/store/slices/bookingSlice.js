@@ -37,9 +37,9 @@ export const createCustomer = createAsyncThunk(
 // Async thunks for business types
 export const fetchBusinessTypes = createAsyncThunk(
   'booking/fetchBusinessTypes',
-  async (_, { rejectWithValue }) => {
+  async (includeArchived = false, { rejectWithValue }) => {
     try {
-      const response = await businessTypesAPI.getAll();
+      const response = await businessTypesAPI.getAll(includeArchived);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch business types');
@@ -62,9 +62,9 @@ export const createBusinessType = createAsyncThunk(
 // Async thunks for magazines
 export const fetchMagazines = createAsyncThunk(
   'booking/fetchMagazines',
-  async (_, { rejectWithValue }) => {
+  async (includeArchived = false, { rejectWithValue }) => {
     try {
-      const response = await magazinesAPI.getAll();
+      const response = await magazinesAPI.getAll(includeArchived);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch magazines');
@@ -87,9 +87,9 @@ export const createMagazine = createAsyncThunk(
 // Async thunks for content sizes
 export const fetchContentSizes = createAsyncThunk(
   'booking/fetchContentSizes',
-  async (_, { rejectWithValue }) => {
+  async (includeArchived = false, { rejectWithValue }) => {
     try {
-      const response = await contentSizesAPI.getAll();
+      const response = await contentSizesAPI.getAll(includeArchived);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch content sizes');

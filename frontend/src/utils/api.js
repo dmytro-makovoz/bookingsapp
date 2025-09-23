@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { isTokenExpired, clearAuthData } from './auth';
 
-// const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-const API_BASE_URL = 'https://adbooker.co.uk/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// const API_BASE_URL = 'https://adbooker.co.uk/api';
 // Create axios instance with default config
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -68,31 +68,34 @@ export const customersAPI = {
 
 // Business Types API
 export const businessTypesAPI = {
-  getAll: () => api.get('/business-types'),
+  getAll: (includeArchived = false) => api.get('/business-types', { params: { includeArchived } }),
   getById: (id) => api.get(`/business-types/${id}`),
   create: (businessTypeData) => api.post('/business-types', businessTypeData),
   update: (id, businessTypeData) => api.put(`/business-types/${id}`, businessTypeData),
   delete: (id) => api.delete(`/business-types/${id}`),
-  search: (query) => api.get(`/business-types/search/${query}`),
+  archive: (id, archived) => api.patch(`/business-types/${id}/archive`, { archived }),
+  search: (query, includeArchived = false) => api.get(`/business-types/search/${query}`, { params: { includeArchived } }),
 };
 
 // Magazines API
 export const magazinesAPI = {
-  getAll: () => api.get('/magazines'),
+  getAll: (includeArchived = false) => api.get('/magazines', { params: { includeArchived } }),
   getById: (id) => api.get(`/magazines/${id}`),
   create: (magazineData) => api.post('/magazines', magazineData),
   update: (id, magazineData) => api.put(`/magazines/${id}`, magazineData),
   delete: (id) => api.delete(`/magazines/${id}`),
+  archive: (id, archived) => api.patch(`/magazines/${id}/archive`, { archived }),
   getCurrentIssue: (magazineId) => api.get(`/magazines/current-issue/${magazineId}`),
 };
 
 // Content Sizes API
 export const contentSizesAPI = {
-  getAll: () => api.get('/content-sizes'),
+  getAll: (includeArchived = false) => api.get('/content-sizes', { params: { includeArchived } }),
   getById: (id) => api.get(`/content-sizes/${id}`),
   create: (contentSizeData) => api.post('/content-sizes', contentSizeData),
   update: (id, contentSizeData) => api.put(`/content-sizes/${id}`, contentSizeData),
   delete: (id) => api.delete(`/content-sizes/${id}`),
+  archive: (id, archived) => api.patch(`/content-sizes/${id}/archive`, { archived }),
   getPrice: (contentSizeId, magazineId) => api.get(`/content-sizes/${contentSizeId}/price/${magazineId}`),
 };
 
