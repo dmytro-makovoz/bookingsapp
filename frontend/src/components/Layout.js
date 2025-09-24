@@ -38,7 +38,6 @@ const Layout = ({ children }) => {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Customers', href: '/customers', icon: Users },
-    { name: 'New Booking', href: '/bookings/new', icon: PlusCircle },
     { name: 'Bookings', href: '/bookings', icon: FileText },
     { name: 'Leaflet Delivery', href: '/leaflet-delivery', icon: Truck },
     { name: 'Reports', href: '/reports', icon: BarChart3 },

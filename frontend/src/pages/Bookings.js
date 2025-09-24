@@ -9,7 +9,11 @@ import {
   Trash2, 
   FileText,
   Plus,
-  Download
+  Download,
+  X,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import { 
@@ -26,10 +30,15 @@ const Bookings = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredBookings, setFilteredBookings] = useState([]);
   const [filters, setFilters] = useState({
-    customer: '',
     magazine: '',
     contentType: '',
-    status: ''
+    startIssue: '',
+    finishIssue: '',
+    showOngoing: false
+  });
+  const [sortConfig, setSortConfig] = useState({
+    key: null,
+    direction: 'asc'
   });
 
   useEffect(() => {
@@ -51,21 +60,84 @@ const Bookings = () => {
     }
 
     // Apply filters
-    if (filters.customer) {
-      filtered = filtered.filter(booking => booking.customer?._id === filters.customer);
-    }
     if (filters.magazine) {
       filtered = filtered.filter(booking => booking.magazines.some(mag => mag._id === filters.magazine));
     }
     if (filters.contentType) {
       filtered = filtered.filter(booking => booking.contentType === filters.contentType);
     }
-    if (filters.status) {
-      filtered = filtered.filter(booking => booking.status === filters.status);
+    if (filters.startIssue) {
+      filtered = filtered.filter(booking => 
+        booking.firstIssue && booking.firstIssue.toLowerCase().includes(filters.startIssue.toLowerCase())
+      );
+    }
+    if (filters.finishIssue) {
+      filtered = filtered.filter(booking => 
+        booking.lastIssue && booking.lastIssue.toLowerCase().includes(filters.finishIssue.toLowerCase())
+      );
+    }
+    if (filters.showOngoing) {
+      filtered = filtered.filter(booking => booking.isOngoing === true);
+    }
+
+    // Apply sorting
+    if (sortConfig.key) {
+      filtered = [...filtered].sort((a, b) => {
+        let aValue, bValue;
+
+        switch (sortConfig.key) {
+          case 'customer':
+            aValue = a.customer?.name || '';
+            bValue = b.customer?.name || '';
+            break;
+          case 'issue':
+            aValue = a.firstIssue || '';
+            bValue = b.firstIssue || '';
+            break;
+          case 'contentType':
+            aValue = a.contentType || '';
+            bValue = b.contentType || '';
+            break;
+          case 'size':
+            aValue = a.contentSize?.size || 0;
+            bValue = b.contentSize?.size || 0;
+            return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+          default:
+            aValue = a[sortConfig.key] || '';
+            bValue = b[sortConfig.key] || '';
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
     }
 
     setFilteredBookings(filtered);
-  }, [bookings, searchTerm, filters]);
+  }, [bookings, searchTerm, filters, sortConfig]);
+
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setFilters({
+      magazine: '',
+      contentType: '',
+      startIssue: '',
+      finishIssue: '',
+      showOngoing: false
+    });
+    setSortConfig({
+      key: null,
+      direction: 'asc'
+    });
+  };
 
   const handleDelete = async (bookingId) => {
     if (window.confirm('Are you sure you want to delete this booking?')) {
@@ -101,8 +173,63 @@ const Bookings = () => {
     }
   };
 
+  // Generate dynamic size icon based on booking size
+  const generateSizeIcon = (size) => {
+    if (!size) return <FileText className="h-5 w-5 text-blue-600" />;
+    
+    // Normalize size to create appropriate icon dimensions
+    // Assuming common sizes range from 0.1 to 2.0 (full page = 1.0)
+    const normalizedSize = Math.min(Math.max(size, 0.1), 2.0);
+    
+    // Create different icon styles based on size ranges
+    if (size >= 1.5) {
+      // Double page or very large ads - wide rectangle
+      return (
+        <div className="w-10 h-6 bg-gradient-to-r from-blue-500 to-blue-700 rounded flex items-center justify-center">
+          <span className="text-white text-xs font-bold">XL</span>
+        </div>
+      );
+    } else if (size >= 1.0) {
+      // Full page - square
+      return (
+        <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-700 rounded flex items-center justify-center">
+          <span className="text-white text-xs font-bold">L</span>
+        </div>
+      );
+    } else if (size >= 0.5) {
+      // Half page - rectangle
+      return (
+        <div className="w-8 h-6 bg-gradient-to-br from-yellow-500 to-yellow-700 rounded flex items-center justify-center">
+          <span className="text-white text-xs font-bold">M</span>
+        </div>
+      );
+    } else if (size >= 0.25) {
+      // Quarter page - small rectangle
+      return (
+        <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-purple-700 rounded flex items-center justify-center">
+          <span className="text-white text-xs font-bold">S</span>
+        </div>
+      );
+    } else {
+      // Small ads - tiny rectangle
+      return (
+        <div className="w-5 h-4 bg-gradient-to-br from-red-500 to-red-700 rounded flex items-center justify-center">
+          <span className="text-white text-xs font-bold">XS</span>
+        </div>
+      );
+    }
+  };
+
+  const getSortIcon = (key) => {
+    if (sortConfig.key !== key) return <ArrowUpDown className="h-4 w-4" />;
+    return sortConfig.direction === 'asc' ? 
+      <ArrowUp className="h-4 w-4" /> : 
+      <ArrowDown className="h-4 w-4" />;
+  };
+
   const contentTypes = ['Advert', 'Article', 'Puzzle', 'Advertorial', 'Front Cover', 'In-house'];
-  const statuses = ['Active', 'Completed', 'Cancelled'];
+
+  const hasActiveFilters = searchTerm || Object.values(filters).some(f => f === true || (f && f !== ''));
 
   return (
     <Layout>
@@ -141,27 +268,25 @@ const Bookings = () => {
                 />
               </div>
             </div>
-            <button className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </button>
+            <div className="flex items-center space-x-3">
+              {hasActiveFilters && (
+                <button
+                  onClick={clearAllFilters}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Clear All
+                </button>
+              )}
+              <button className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </button>
+            </div>
           </div>
 
           {/* Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <select
-              value={filters.customer}
-              onChange={(e) => setFilters({...filters, customer: e.target.value})}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">All Customers</option>
-              {customers.map((customer) => (
-                <option key={customer._id} value={customer._id}>
-                  {customer.name}
-                </option>
-              ))}
-            </select>
-
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <select
               value={filters.magazine}
               onChange={(e) => setFilters({...filters, magazine: e.target.value})}
@@ -188,18 +313,63 @@ const Bookings = () => {
               ))}
             </select>
 
-            <select
-              value={filters.status}
-              onChange={(e) => setFilters({...filters, status: e.target.value})}
+            <input
+              type="text"
+              placeholder="Start Issue"
+              value={filters.startIssue}
+              onChange={(e) => setFilters({...filters, startIssue: e.target.value})}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            />
+
+            <input
+              type="text"
+              placeholder="Finish Issue"
+              value={filters.finishIssue}
+              onChange={(e) => setFilters({...filters, finishIssue: e.target.value})}
+              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            />
+
+            <div className="flex items-center">
+              <input
+                id="showOngoing"
+                type="checkbox"
+                checked={filters.showOngoing}
+                onChange={(e) => setFilters({...filters, showOngoing: e.target.checked})}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="showOngoing" className="ml-2 block text-sm text-gray-900">
+                Show Ongoing Only
+              </label>
+            </div>
+          </div>
+
+          {/* Sorting Options */}
+          <div className="flex flex-wrap items-center space-x-2">
+            <span className="text-sm text-gray-500">Sort by:</span>
+            <button
+              onClick={() => handleSort('customer')}
+              className="inline-flex items-center px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded"
             >
-              <option value="">All Statuses</option>
-              {statuses.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
+              Customer {getSortIcon('customer')}
+            </button>
+            <button
+              onClick={() => handleSort('issue')}
+              className="inline-flex items-center px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded"
+            >
+              Issue {getSortIcon('issue')}
+            </button>
+            <button
+              onClick={() => handleSort('contentType')}
+              className="inline-flex items-center px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded"
+            >
+              Content Type {getSortIcon('contentType')}
+            </button>
+            <button
+              onClick={() => handleSort('size')}
+              className="inline-flex items-center px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded"
+            >
+              Size {getSortIcon('size')}
+            </button>
           </div>
         </div>
 
@@ -218,8 +388,8 @@ const Bookings = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-start min-w-0 flex-1">
                         <div className="flex-shrink-0">
-                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <FileText className="h-5 w-5 text-blue-600" />
+                          <div className="flex items-center justify-center">
+                            {generateSizeIcon(booking.contentSize?.size)}
                           </div>
                         </div>
                         <div className="ml-4 min-w-0 flex-1">
@@ -239,7 +409,7 @@ const Bookings = () => {
                               {booking.magazines?.map(mag => mag.name).join(', ') || 'No magazines'}
                             </span>
                             <span>
-                              {booking.contentSize?.description || 'Unknown size'}
+                              {booking.contentSize?.description || 'Unknown size'} ({booking.contentSize?.size || 0})
                             </span>
                             <span>
                               {booking.firstIssue} - {booking.isOngoing ? 'Ongoing' : (booking.lastIssue || 'Single issue')}
