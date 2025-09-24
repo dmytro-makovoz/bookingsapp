@@ -329,7 +329,7 @@ const NewBooking = () => {
                       <option value="">Select content size</option>
                       {contentSizes.map((size) => (
                         <option key={size._id} value={size._id}>
-                          {size.name} ({size.width}" x {size.height}")
+                          {size.description} ({size.size})
                         </option>
                       ))}
                     </select>
