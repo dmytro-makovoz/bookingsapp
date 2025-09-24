@@ -18,7 +18,23 @@ router.get('/', auth, async (req, res) => {
     const contentSizes = await ContentSize.find(filter)
       .populate('pricing.magazine', 'name')
       .sort({ size: 1 });
-    res.json(contentSizes);
+    
+    // Filter out invalid magazine references and clean up data on-the-fly
+    const cleanedContentSizes = contentSizes.map(contentSize => {
+      const validPricing = contentSize.pricing.filter(pricing => pricing.magazine != null);
+      
+      // Log if we found invalid references
+      if (validPricing.length !== contentSize.pricing.length) {
+        console.warn(`Found ${contentSize.pricing.length - validPricing.length} invalid magazine references in content size: ${contentSize.description}`);
+      }
+      
+      return {
+        ...contentSize.toObject(),
+        pricing: validPricing
+      };
+    }).filter(contentSize => contentSize.pricing.length > 0); // Only return content sizes with at least one valid pricing
+    
+    res.json(cleanedContentSizes);
   } catch (error) {
     console.error('Error fetching content sizes:', error);
     res.status(500).json({ message: 'Server error' });
@@ -207,6 +223,59 @@ router.patch('/:id/archive', auth, async (req, res) => {
   } catch (error) {
     console.error('Error updating content size archive status:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Cleanup invalid magazine references in content sizes
+router.post('/cleanup', auth, async (req, res) => {
+  try {
+    console.log('Starting content size cleanup for user:', req.user.id);
+    
+    // Get all content sizes for this user
+    const contentSizes = await ContentSize.find({ createdBy: req.user.id });
+    
+    let cleanupCount = 0;
+    let deletedCount = 0;
+    
+    for (const contentSize of contentSizes) {
+      let needsUpdate = false;
+      const validPricing = [];
+      
+      // Check each pricing entry
+      for (const pricing of contentSize.pricing) {
+        const magazine = await Magazine.findById(pricing.magazine);
+        if (magazine && magazine.createdBy.toString() === req.user.id.toString()) {
+          validPricing.push(pricing);
+        } else {
+          console.log(`Removing invalid magazine reference: ${pricing.magazine} from content size: ${contentSize.description}`);
+          needsUpdate = true;
+          cleanupCount++;
+        }
+      }
+      
+      if (needsUpdate) {
+        if (validPricing.length === 0) {
+          // Delete content size if it has no valid magazine pricing
+          await ContentSize.findByIdAndDelete(contentSize._id);
+          deletedCount++;
+          console.log(`Deleted content size with no valid magazines: ${contentSize.description}`);
+        } else {
+          // Update with only valid pricing entries
+          contentSize.pricing = validPricing;
+          await contentSize.save();
+          console.log(`Updated content size: ${contentSize.description}, removed ${contentSize.pricing.length - validPricing.length} invalid magazine references`);
+        }
+      }
+    }
+    
+    res.json({ 
+      message: 'Content size cleanup completed',
+      invalidReferencesRemoved: cleanupCount,
+      contentSizesDeleted: deletedCount
+    });
+  } catch (error) {
+    console.error('Error during content size cleanup:', error);
+    res.status(500).json({ message: 'Server error during cleanup' });
   }
 });
 

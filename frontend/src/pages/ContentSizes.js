@@ -11,7 +11,8 @@ import {
   Layers,
   X,
   Archive,
-  ArchiveRestore
+  ArchiveRestore,
+  Wrench
 } from 'lucide-react';
 
 import { 
@@ -237,8 +238,12 @@ const ContentSizes = () => {
   const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
-    dispatch(fetchContentSizes(showArchived));
-    dispatch(fetchMagazines());
+    // Load magazines first, then content sizes to ensure proper data availability
+    const loadData = async () => {
+      await dispatch(fetchMagazines());
+      dispatch(fetchContentSizes(showArchived));
+    };
+    loadData();
   }, [dispatch, showArchived]);
 
   useEffect(() => {
@@ -298,9 +303,46 @@ const ContentSizes = () => {
     setIsModalOpen(true);
   };
 
+  const handleCleanup = async () => {
+    if (!window.confirm('This will remove any content size entries that reference deleted magazines. Are you sure?')) {
+      return;
+    }
+    
+    try {
+      const response = await contentSizesAPI.cleanup();
+      const { invalidReferencesRemoved, contentSizesDeleted } = response.data;
+      
+      let message = 'Data cleanup completed successfully. ';
+      if (invalidReferencesRemoved > 0) {
+        message += `Removed ${invalidReferencesRemoved} invalid magazine references. `;
+      }
+      if (contentSizesDeleted > 0) {
+        message += `Deleted ${contentSizesDeleted} content sizes with no valid magazines.`;
+      }
+      if (invalidReferencesRemoved === 0 && contentSizesDeleted === 0) {
+        message += 'No issues found - data is clean.';
+      }
+      
+      toast.success(message);
+      
+      // Refresh the data after cleanup
+      dispatch(fetchContentSizes(showArchived));
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'An error occurred during cleanup');
+    }
+  };
+
   const getMagazineName = (magazineId) => {
-    const magazine = magazines.find(m => m._id === magazineId);
-    return magazine ? magazine.name : 'Unknown Magazine';
+    // Handle different magazine ID formats (ObjectId vs string)
+    const magazineIdStr = typeof magazineId === 'object' ? magazineId._id || magazineId.toString() : magazineId;
+    const magazine = magazines.find(m => m._id === magazineIdStr);
+    
+    if (!magazine) {
+      console.warn(`Magazine with ID ${magazineIdStr} not found. Available magazines:`, magazines.map(m => ({ id: m._id, name: m.name })));
+      return '[Deleted Magazine]'; // More descriptive than "Unknown Magazine"
+    }
+    
+    return magazine.name;
   };
 
   return (
@@ -344,13 +386,23 @@ const ContentSizes = () => {
             </div>
           </div>
           
-          <button
-            onClick={() => openModal()}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Content Size
-          </button>
+          <div className="flex space-x-3">
+            <button
+              onClick={handleCleanup}
+              className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              title="Clean up invalid magazine references"
+            >
+              <Wrench className="h-4 w-4 mr-2" />
+              Fix Data
+            </button>
+            <button
+              onClick={() => openModal()}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Content Size
+            </button>
+          </div>
         </div>
 
         {/* Content Sizes List */}

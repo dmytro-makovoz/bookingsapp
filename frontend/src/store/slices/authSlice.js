@@ -3,8 +3,8 @@ import axios from 'axios';
 import { isTokenExpired, clearAuthData } from '../../utils/auth';
 
 // Configure axios defaults
-// const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/auth';
-const API_URL = 'https://adbooker.co.uk/api/auth';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/auth';
+// const API_URL = 'https://adbooker.co.uk/api/auth';
 // Get user from localStorage
 const user = JSON.parse(localStorage.getItem('user'));
 const token = localStorage.getItem('token');
