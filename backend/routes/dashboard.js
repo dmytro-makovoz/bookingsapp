@@ -185,42 +185,39 @@ router.get('/current-issue/:magazineId', auth, async (req, res) => {
     const magazine = await Magazine.findOne({ 
       _id: req.params.magazineId, 
       createdBy: req.user.id 
-    });
+    }).populate('schedule', 'name issues');
 
     if (!magazine) {
       return res.status(404).json({ message: 'Magazine not found' });
     }
 
-    // Find current issue
+    if (!magazine.schedule) {
+      return res.status(400).json({ message: 'Magazine has no schedule assigned' });
+    }
+
+    // Find current issue (first issue that hasn't passed its close date)
     const currentDate = new Date();
     let currentIssue = null;
-    let closestDate = null;
-
-    for (const issue of magazine.issues) {
-      const issueStartDate = new Date(issue.startDate);
-      if (issueStartDate <= currentDate) {
-        if (!closestDate || issueStartDate > closestDate) {
-          closestDate = issueStartDate;
-          currentIssue = issue;
-        }
+    
+    for (const issue of magazine.schedule.issues) {
+      const issueCloseDate = new Date(issue.closeDate);
+      if (issueCloseDate >= currentDate) {
+        currentIssue = {
+          ...issue._doc,
+          // Add page count from magazine page configurations
+          totalPages: magazine.pageConfigurations.find(pc => pc.issueName === issue.name)?.totalPages || 40
+        };
+        break;
       }
     }
 
-    if (!currentIssue) {
-      // Get next upcoming issue
-      let nextIssue = null;
-      let earliestDate = null;
-
-      for (const issue of magazine.issues) {
-        const issueStartDate = new Date(issue.startDate);
-        if (issueStartDate > currentDate) {
-          if (!earliestDate || issueStartDate < earliestDate) {
-            earliestDate = issueStartDate;
-            nextIssue = issue;
-          }
-        }
-      }
-      currentIssue = nextIssue;
+    // If all issues have passed their close date, return the last issue
+    if (!currentIssue && magazine.schedule.issues.length > 0) {
+      const lastIssue = magazine.schedule.issues[magazine.schedule.issues.length - 1];
+      currentIssue = {
+        ...lastIssue._doc,
+        totalPages: magazine.pageConfigurations.find(pc => pc.issueName === lastIssue.name)?.totalPages || 40
+      };
     }
 
     if (!currentIssue) {
@@ -294,7 +291,7 @@ router.get('/current-issue/:magazineId', auth, async (req, res) => {
       currentIssue: {
         name: currentIssue.name,
         totalPages: currentIssue.totalPages,
-        startDate: currentIssue.startDate
+        closeDate: currentIssue.closeDate
       },
       totalBookedPages,
       totalPages,

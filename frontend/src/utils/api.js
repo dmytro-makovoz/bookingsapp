@@ -97,6 +97,18 @@ export const magazinesAPI = {
   getCurrentIssue: (magazineId) => api.get(`/magazines/current-issue/${magazineId}`),
 };
 
+// Schedules API
+export const schedulesAPI = {
+  getAll: () => api.get('/schedules'),
+  getById: (id) => api.get(`/schedules/${id}`),
+  create: (scheduleData) => api.post('/schedules', scheduleData),
+  update: (id, scheduleData) => api.put(`/schedules/${id}`, scheduleData),
+  delete: (id) => api.delete(`/schedules/${id}`),
+  archive: (id) => api.patch(`/schedules/${id}/archive`),
+  getAvailableIssues: (scheduleId) => api.get(`/schedules/${scheduleId}/available-issues`),
+  validateIssue: (issueName) => api.get(`/schedules/validate-issue/${encodeURIComponent(issueName)}`),
+};
+
 // Content Sizes API
 export const contentSizesAPI = {
   getAll: (includeArchived = false) => api.get('/content-sizes', { params: { includeArchived } }),
@@ -118,6 +130,7 @@ export const bookingsAPI = {
   delete: (id) => api.delete(`/bookings/${id}`),
   getCustomerBookings: (customerId) => api.get(`/bookings/customer/${customerId}`),
   getReportData: (params = {}) => api.get('/bookings/report/data', { params }),
+  getCurrentIssue: () => api.get('/bookings/current-issue'),
 };
 
 // Leaflet Delivery API

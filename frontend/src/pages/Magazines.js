@@ -9,13 +9,11 @@ import {
   Edit, 
   Trash2,
   BookOpen,
-  FileText,
   X,
   Archive,
   ArchiveRestore,
-  GripVertical,
-  Eye,
-  EyeOff
+  Calendar,
+  Clock
 } from 'lucide-react';
 
 import { 
@@ -24,97 +22,117 @@ import {
   updateMagazine, 
   deleteMagazine 
 } from '../store/slices/bookingSlice';
-import { magazinesAPI } from '../utils/api';
+import { magazinesAPI, schedulesAPI } from '../utils/api';
 import { toast } from 'react-toastify';
 
 const magazineSchema = yup.object().shape({
   name: yup.string().required('Magazine name is required'),
-  issues: yup.array().of(
+  schedule: yup.string().required('Schedule is required'),
+  pageConfigurations: yup.array().of(
     yup.object().shape({
-      name: yup.string().required('Issue name is required'),
-      totalPages: yup.number().required('Total pages is required').min(1, 'Must be at least 1 page'),
-      startDate: yup.date().required('Start date is required'),
-      sortOrder: yup.number().required('Sort order is required').min(0),
-      hidden: yup.boolean()
+      issueName: yup.string().required('Issue name is required'),
+      totalPages: yup.number().required('Total pages is required').min(1, 'Must be at least 1 page')
     })
-  ).min(1, 'At least one issue is required'),
+  )
 });
 
 const MagazineModal = ({ magazine, onClose, onSave }) => {
+  const [schedules, setSchedules] = useState([]);
+  const [selectedSchedule, setSelectedSchedule] = useState(null);
+  const [scheduleIssues, setScheduleIssues] = useState([]);
+
   const { register, handleSubmit, control, formState: { errors }, reset, watch, setValue } = useForm({
     resolver: yupResolver(magazineSchema),
-    defaultValues: magazine || { issues: [{ name: '', totalPages: 40, startDate: '', sortOrder: 0, hidden: false }] }
+    defaultValues: magazine || { pageConfigurations: [] }
   });
 
-  const { fields, append, remove, move } = useFieldArray({
+  const { fields, append, remove, replace } = useFieldArray({
     control,
-    name: 'issues'
+    name: 'pageConfigurations'
   });
 
-  const [draggedItem, setDraggedItem] = useState(null);
-  const watchedIssues = watch('issues');
+  const watchedSchedule = watch('schedule');
 
-  const onSubmit = (data) => {
-    // Convert dates to ISO strings and update sort orders based on array position
-    const formattedData = {
-      ...data,
-      issues: data.issues.map((issue, index) => ({
-        ...issue,
-        startDate: new Date(issue.startDate).toISOString(),
-        totalPages: parseInt(issue.totalPages),
-        sortOrder: index, // Use array index as sort order
-        hidden: Boolean(issue.hidden)
-      }))
-    };
-    onSave(formattedData);
-    reset();
-  };
-
-  const handleDragStart = (e, index) => {
-    setDraggedItem(index);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDrop = (e, dropIndex) => {
-    e.preventDefault();
-    if (draggedItem !== null && draggedItem !== dropIndex) {
-      move(draggedItem, dropIndex);
-    }
-    setDraggedItem(null);
-  };
-
-  const toggleHidden = (index) => {
-    const currentValue = watchedIssues[index]?.hidden || false;
-    setValue(`issues.${index}.hidden`, !currentValue);
-  };
+  useEffect(() => {
+    fetchSchedules();
+  }, []);
 
   useEffect(() => {
     if (magazine) {
-      const formattedMagazine = {
-        ...magazine,
-        issues: magazine.issues.map(issue => ({
-          ...issue,
-          startDate: new Date(issue.startDate).toISOString().split('T')[0],
-          hidden: issue.hidden || false
-        }))
-      };
-      reset(formattedMagazine);
+      reset({
+        name: magazine.name,
+        schedule: magazine.schedule?._id || magazine.schedule,
+        pageConfigurations: magazine.pageConfigurations || []
+      });
+      
+      if (magazine.schedule) {
+        setSelectedSchedule(magazine.schedule);
+        setScheduleIssues(magazine.schedule.issues || []);
+      }
     }
   }, [magazine, reset]);
 
+  useEffect(() => {
+    if (watchedSchedule) {
+      const schedule = schedules.find(s => s._id === watchedSchedule);
+      if (schedule) {
+        setSelectedSchedule(schedule);
+        setScheduleIssues(schedule.issues || []);
+        
+        // Initialize page configurations for all issues in the schedule
+        const newPageConfigurations = schedule.issues.map(issue => {
+          const existing = (magazine?.pageConfigurations || []).find(pc => pc.issueName === issue.name);
+          return {
+            issueName: issue.name,
+            totalPages: existing?.totalPages || 40
+          };
+        });
+        
+        replace(newPageConfigurations);
+      }
+    }
+  }, [watchedSchedule, schedules, magazine, replace]);
+
+  const fetchSchedules = async () => {
+    try {
+      const response = await schedulesAPI.getAll();
+      setSchedules(response.data);
+    } catch (error) {
+      console.error('Error fetching schedules:', error);
+      toast.error('Error fetching schedules');
+    }
+  };
+
+  const onSubmit = (data) => {
+    onSave(data);
+    reset();
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  const isCloseDatePast = (closeDate) => {
+    return new Date(closeDate) < new Date();
+  };
+
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-10 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          {magazine ? 'Edit Magazine' : 'Add New Magazine'}
-        </h3>
-        
+      <div className="relative top-20 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium text-gray-900">
+            {magazine ? 'Edit Magazine' : 'Add Magazine'}
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {/* Magazine Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Magazine Name
@@ -122,146 +140,142 @@ const MagazineModal = ({ magazine, onClose, onSave }) => {
             <input
               type="text"
               {...register('name')}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              placeholder="e.g. Mytown Magazine"
+              placeholder="e.g., Local Advertiser"
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
             {errors.name && (
-              <p className="text-red-600 text-sm mt-1">{errors.name.message}</p>
+              <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
             )}
           </div>
 
+          {/* Schedule Selection */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700">
-                Issues
-              </label>
-              <button
-                type="button"
-                onClick={() => append({ name: '', totalPages: 40, startDate: '', sortOrder: fields.length, hidden: false })}
-                className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Issue
-              </button>
-            </div>
-            
-            <div className="text-xs text-gray-500 mb-2">
-              Drag issues to reorder them
-            </div>
-            
-            <div className="space-y-3 max-h-60 overflow-y-auto">
-              {fields.map((field, index) => (
-                <div 
-                  key={field.id} 
-                  className={`border border-gray-200 rounded-lg p-3 ${
-                    watchedIssues[index]?.hidden ? 'bg-gray-50 border-dashed' : 'bg-white'
-                  }`}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, index)}
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, index)}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      <GripVertical className="h-4 w-4 text-gray-400 cursor-move" />
-                      <button
-                        type="button"
-                        onClick={() => toggleHidden(index)}
-                        className={`p-1 rounded ${
-                          watchedIssues[index]?.hidden 
-                            ? 'text-gray-400 hover:text-gray-600' 
-                            : 'text-green-600 hover:text-green-800'
-                        }`}
-                        title={watchedIssues[index]?.hidden ? 'Show in bookings' : 'Hide from bookings'}
-                      >
-                        {watchedIssues[index]?.hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                      {watchedIssues[index]?.hidden && (
-                        <span className="text-xs text-gray-500 italic">Hidden from bookings</span>
-                      )}
-                    </div>
-                    {fields.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => remove(index)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Issue Name
-                      </label>
-                      <input
-                        type="text"
-                        {...register(`issues.${index}.name`)}
-                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="e.g. Nov25"
-                      />
-                      {errors.issues?.[index]?.name && (
-                        <p className="text-red-600 text-xs mt-1">{errors.issues[index].name.message}</p>
-                      )}
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Total Pages
-                      </label>
-                      <input
-                        type="number"
-                        {...register(`issues.${index}.totalPages`)}
-                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        min="1"
-                      />
-                      {errors.issues?.[index]?.totalPages && (
-                        <p className="text-red-600 text-xs mt-1">{errors.issues[index].totalPages.message}</p>
-                      )}
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Start Date
-                      </label>
-                      <input
-                        type="date"
-                        {...register(`issues.${index}.startDate`)}
-                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      {errors.issues?.[index]?.startDate && (
-                        <p className="text-red-600 text-xs mt-1">{errors.issues[index].startDate.message}</p>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Hidden field for sortOrder */}
-                  <input type="hidden" {...register(`issues.${index}.sortOrder`)} value={index} />
-                  {/* Hidden field for hidden status */}
-                  <input type="hidden" {...register(`issues.${index}.hidden`)} />
-                </div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Schedule
+            </label>
+            <select
+              {...register('schedule')}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Select a schedule</option>
+              {schedules.map((schedule) => (
+                <option key={schedule._id} value={schedule._id}>
+                  {schedule.name} ({schedule.issues.length} issues)
+                </option>
               ))}
-            </div>
-            {errors.issues && (
-              <p className="text-red-600 text-sm mt-1">{errors.issues.message}</p>
+            </select>
+            {errors.schedule && (
+              <p className="mt-1 text-sm text-red-600">{errors.schedule.message}</p>
             )}
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4">
+          {/* Schedule Preview */}
+          {selectedSchedule && scheduleIssues.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-3">
+                Schedule Preview: {selectedSchedule.name}
+              </h4>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="space-y-2 max-h-32 overflow-y-auto">
+                  {scheduleIssues.map((issue, index) => (
+                    <div
+                      key={index}
+                      className="flex justify-between items-center py-1 px-2 bg-white rounded text-sm"
+                    >
+                      <span className="font-medium">{issue.name}</span>
+                      <div className="flex items-center space-x-2">
+                        <Clock className="h-3 w-3 text-gray-400" />
+                        <span className={isCloseDatePast(issue.closeDate) ? 'text-red-600' : 'text-gray-600'}>
+                          Close: {formatDate(issue.closeDate)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Page Configurations */}
+          {fields.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-3">
+                Page Configuration for Each Issue
+              </h4>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {fields.map((field, index) => {
+                  const issue = scheduleIssues.find(i => i.name === field.issueName);
+                  const isPast = issue && isCloseDatePast(issue.closeDate);
+                  
+                  return (
+                    <div
+                      key={field.id}
+                      className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg bg-gray-50"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="text-sm font-medium text-gray-900">
+                            {field.issueName}
+                          </span>
+                          {issue && (
+                            <div className="flex items-center space-x-1">
+                              <Clock className="h-3 w-3 text-gray-400" />
+                              <span className={`text-xs ${isPast ? 'text-red-600' : 'text-gray-500'}`}>
+                                Close: {formatDate(issue.closeDate)}
+                              </span>
+                              {isPast && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                                  Closed
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <input
+                          type="hidden"
+                          {...register(`pageConfigurations.${index}.issueName`)}
+                        />
+                        <div className="flex items-center space-x-2">
+                          <label className="text-xs text-gray-600">Pages:</label>
+                          <input
+                            type="number"
+                            min="1"
+                            {...register(`pageConfigurations.${index}.totalPages`)}
+                            className="w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        {errors.pageConfigurations?.[index]?.totalPages && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {errors.pageConfigurations[index].totalPages.message}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Form Actions */}
+          <div className="flex justify-end space-x-3 pt-6 border-t">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={!watchedSchedule}
+              className={`px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                watchedSchedule 
+                  ? 'bg-blue-600 hover:bg-blue-700' 
+                  : 'bg-gray-400 cursor-not-allowed'
+              } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
             >
-              {magazine ? 'Update' : 'Create'}
+              {magazine ? 'Update' : 'Create'} Magazine
             </button>
           </div>
         </form>
@@ -273,230 +287,237 @@ const MagazineModal = ({ magazine, onClose, onSave }) => {
 const Magazines = () => {
   const dispatch = useDispatch();
   const { magazines, loading } = useSelector((state) => state.booking);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingMagazine, setEditingMagazine] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filteredMagazines, setFilteredMagazines] = useState([]);
-  const [showArchived, setShowArchived] = useState(false);
+  const [selectedMagazine, setSelectedMagazine] = useState(null);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    dispatch(fetchMagazines(showArchived));
-  }, [dispatch, showArchived]);
+    dispatch(fetchMagazines());
+  }, [dispatch]);
 
-  useEffect(() => {
-    if (searchTerm) {
-      setFilteredMagazines(
-        magazines.filter(magazine =>
-          magazine.name.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      );
-    } else {
-      setFilteredMagazines(magazines);
-    }
-  }, [magazines, searchTerm]);
-
-  const handleSave = async (data) => {
+  const handleCreateMagazine = async (magazineData) => {
     try {
-      if (editingMagazine) {
-        const response = await magazinesAPI.update(editingMagazine._id, data);
-        dispatch(updateMagazine(response.data));
-        toast.success('Magazine updated successfully');
-      } else {
-        const response = await magazinesAPI.create(data);
-        dispatch(addMagazine(response.data));
-        toast.success('Magazine created successfully');
-      }
-      setIsModalOpen(false);
-      setEditingMagazine(null);
+      const response = await magazinesAPI.create(magazineData);
+      dispatch(addMagazine(response.data));
+      setShowModal(false);
+      toast.success('Magazine created successfully');
     } catch (error) {
-      toast.error(error.response?.data?.message || 'An error occurred');
+      console.error('Error creating magazine:', error);
+      toast.error(error.response?.data?.message || 'Error creating magazine');
     }
   };
 
-  const handleDelete = async (magazineId) => {
+  const handleUpdateMagazine = async (magazineData) => {
+    try {
+      const response = await magazinesAPI.update(selectedMagazine._id, magazineData);
+      dispatch(updateMagazine(response.data));
+      setShowModal(false);
+      setSelectedMagazine(null);
+      toast.success('Magazine updated successfully');
+    } catch (error) {
+      console.error('Error updating magazine:', error);
+      toast.error(error.response?.data?.message || 'Error updating magazine');
+    }
+  };
+
+  const handleDeleteMagazine = async (magazineId) => {
     if (window.confirm('Are you sure you want to delete this magazine?')) {
       try {
         await magazinesAPI.delete(magazineId);
         dispatch(deleteMagazine(magazineId));
         toast.success('Magazine deleted successfully');
       } catch (error) {
-        toast.error(error.response?.data?.message || 'An error occurred');
+        console.error('Error deleting magazine:', error);
+        toast.error('Error deleting magazine');
       }
     }
   };
 
-  const handleArchiveToggle = async (magazine) => {
+  const handleArchiveMagazine = async (magazine) => {
     try {
-      const response = await magazinesAPI.archive(magazine._id, !magazine.archived);
-      dispatch(updateMagazine(response.data));
-      toast.success(`Magazine ${magazine.archived ? 'unarchived' : 'archived'} successfully`);
+      const newArchivedState = !magazine.archived;
+      await magazinesAPI.archive(magazine._id, newArchivedState);
+      dispatch(updateMagazine({ ...magazine, archived: newArchivedState }));
+      toast.success(`Magazine ${newArchivedState ? 'archived' : 'unarchived'} successfully`);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'An error occurred');
+      console.error('Error archiving magazine:', error);
+      toast.error('Error archiving magazine');
     }
   };
 
-  const openModal = (magazine = null) => {
-    setEditingMagazine(magazine);
-    setIsModalOpen(true);
+  const filteredMagazines = magazines.filter(magazine =>
+    magazine.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString();
   };
 
   return (
     <div>
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Magazines</h1>
-          <p className="mt-2 text-gray-600">Manage your magazine publications and issues</p>
+      {/* Header */}
+      <div className="sm:flex sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg leading-6 font-medium text-gray-900">Magazines</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Manage your magazines and their page configurations by schedule
+          </p>
         </div>
-
-        {/* Actions Bar */}
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-          <div className="flex items-center space-x-4">
-            <div className="flex-1 max-w-lg">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search magazines..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-            
-            {/* Archive Toggle */}
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="showArchived"
-                checked={showArchived}
-                onChange={(e) => setShowArchived(e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="showArchived" className="text-sm text-gray-700">
-                Show archived
-              </label>
-            </div>
-          </div>
-          
+        <div className="mt-4 sm:mt-0">
           <button
-            onClick={() => openModal()}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            onClick={() => {
+              setSelectedMagazine(null);
+              setShowModal(true);
+            }}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <Plus className="h-4 w-4 mr-2" />
             Add Magazine
           </button>
         </div>
+      </div>
 
-        {/* Magazines List */}
-        {loading.magazines ? (
-          <div className="text-center py-8">
+      {/* Search */}
+      <div className="mt-6">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Search magazines..."
+          />
+        </div>
+      </div>
+
+      {/* Magazine Cards */}
+      <div className="mt-6">
+        {loading ? (
+          <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="text-gray-600 mt-2">Loading magazines...</p>
           </div>
-        ) : filteredMagazines.length > 0 ? (
-          <div className="bg-white shadow overflow-hidden sm:rounded-md">
-            <ul className="divide-y divide-gray-200">
-              {filteredMagazines.map((magazine) => (
-                <li key={magazine._id}>
-                  <div className="px-4 py-4 sm:px-6 hover:bg-gray-50">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-start min-w-0 flex-1">
-                        <div className="flex-shrink-0">
-                          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                            <BookOpen className="h-5 w-5 text-green-600" />
-                          </div>
-                        </div>
-                        <div className="ml-4 min-w-0 flex-1">
-                          <div className="flex items-center space-x-2">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {magazine.name}
-                            </p>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                              {magazine.issues.length} issues
-                            </span>
-                            {magazine.issues.some(issue => issue.hidden) && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                                Some hidden
-                              </span>
-                            )}
-                          </div>
-                          <div className="mt-2">
-                            <div className="flex flex-wrap gap-2">
-                              {magazine.issues.slice(0, 3).map((issue, index) => (
-                                <div key={index} className={`flex items-center text-xs rounded-full px-2 py-1 ${
-                                  issue.hidden 
-                                    ? 'text-gray-400 bg-gray-100 border border-dashed border-gray-300' 
-                                    : 'text-gray-500 bg-gray-100'
-                                }`}>
-                                  <FileText className="h-3 w-3 mr-1" />
-                                  {issue.name} ({issue.totalPages}p)
-                                  {issue.hidden && <EyeOff className="h-3 w-3 ml-1" />}
-                                </div>
-                              ))}
-                              {magazine.issues.length > 3 && (
-                                <span className="text-xs text-gray-500 px-2 py-1">
-                                  +{magazine.issues.length - 3} more
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => openModal(magazine)}
-                          className="p-2 text-gray-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(magazine._id)}
-                          className="p-2 text-gray-400 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-md"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : (
+        ) : filteredMagazines.length === 0 ? (
           <div className="text-center py-12">
             <BookOpen className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No magazines found</h3>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No magazines</h3>
             <p className="mt-1 text-sm text-gray-500">
-              {searchTerm ? 'Try adjusting your search terms.' : 'Get started by creating your first magazine.'}
+              Get started by creating a new magazine.
             </p>
-            {!searchTerm && (
-              <div className="mt-6">
-                <button
-                  onClick={() => openModal()}
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Magazine
-                </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {filteredMagazines.map((magazine) => (
+              <div
+                key={magazine._id}
+                className="bg-white shadow rounded-lg overflow-hidden"
+              >
+                <div className="p-6">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-lg font-medium text-gray-900">
+                      {magazine.name}
+                      {magazine.archived && (
+                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          Archived
+                        </span>
+                      )}
+                    </h4>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleArchiveMagazine(magazine)}
+                        className="text-orange-600 hover:text-orange-900"
+                        title={magazine.archived ? 'Unarchive' : 'Archive'}
+                      >
+                        {magazine.archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedMagazine(magazine);
+                          setShowModal(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteMagazine(magazine._id)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    {magazine.schedule ? (
+                      <>
+                        <div className="flex items-center space-x-2 mb-3">
+                          <Calendar className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm font-medium text-gray-700">
+                            Schedule: {magazine.schedule.name}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                            Issues & Pages
+                          </h5>
+                          {magazine.schedule.issues && magazine.schedule.issues.map((issue, index) => {
+                            const pageConfig = magazine.pageConfigurations?.find(pc => pc.issueName === issue.name);
+                            const isPast = new Date(issue.closeDate) < new Date();
+                            
+                            return (
+                              <div
+                                key={index}
+                                className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md text-sm"
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <span className="font-medium text-gray-900">{issue.name}</span>
+                                  {isPast && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                                      Closed
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                  <span className="text-gray-600">
+                                    {pageConfig?.totalPages || 40} pages
+                                  </span>
+                                  <div className="flex items-center space-x-1">
+                                    <span className={`text-xs ${isPast ? 'text-red-600' : 'text-gray-500'}`}>
+                                      {formatDate(issue.closeDate)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-gray-500">No schedule assigned</p>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
+            ))}
           </div>
         )}
+      </div>
 
-        {/* Modal */}
-        {isModalOpen && (
-          <MagazineModal
-            magazine={editingMagazine}
-            onClose={() => {
-              setIsModalOpen(false);
-              setEditingMagazine(null);
-            }}
-            onSave={handleSave}
-          />
-        )}
+      {/* Modal */}
+      {showModal && (
+        <MagazineModal
+          magazine={selectedMagazine}
+          onClose={() => {
+            setShowModal(false);
+            setSelectedMagazine(null);
+          }}
+          onSave={selectedMagazine ? handleUpdateMagazine : handleCreateMagazine}
+        />
+      )}
     </div>
   );
 };

@@ -1,9 +1,10 @@
 const mongoose = require('mongoose');
 
-const bookingSchema = new mongoose.Schema({
-  customer: {
+// Schema for individual magazine booking entries
+const magazineEntrySchema = new mongoose.Schema({
+  magazine: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Customer',
+    ref: 'Magazine',
     required: true
   },
   contentSize: {
@@ -11,17 +12,12 @@ const bookingSchema = new mongoose.Schema({
     ref: 'ContentSize',
     required: true
   },
-  magazines: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Magazine',
-    required: true
-  }],
   contentType: {
     type: String,
-    required: false // Made optional as per user request
+    required: true
   },
-  // Pricing and discounts
-  basePrice: {
+  // Pricing for this specific magazine entry
+  listPrice: {
     type: Number,
     required: true,
     min: 0
@@ -37,30 +33,46 @@ const bookingSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
-  additionalCharges: {
-    type: Number,
-    default: 0
-  },
-  // Calculated net value
-  netValue: {
+  totalPrice: {
     type: Number,
     required: true,
     min: 0
   },
-  // Issue scheduling
-  firstIssue: {
+  // Issue scheduling for this magazine entry
+  startIssue: {
     type: String,
     required: true
   },
-  lastIssue: {
-    type: String // Empty string or null for "Ongoing"
+  finishIssue: {
+    type: String
   },
   isOngoing: {
     type: Boolean,
     default: false
+  }
+});
+
+const bookingSchema = new mongoose.Schema({
+  customer: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Customer',
+    required: true
   },
-  // Optional note
-  note: {
+  // Array of magazine entries (each row in the table)
+  magazineEntries: [magazineEntrySchema],
+  // Overall booking details
+  totalValue: {
+    type: Number,
+    required: true,
+    default: 0,
+    min: 0
+  },
+  additionalCharges: {
+    type: Number,
+    default: 0
+  },
+  // Overall notes for the entire booking
+  notes: {
     type: String,
     trim: true
   },
@@ -81,34 +93,26 @@ const bookingSchema = new mongoose.Schema({
 });
 
 // Create indexes for efficient querying
-bookingSchema.index({ customer: 1, firstIssue: 1 });
-bookingSchema.index({ magazines: 1, firstIssue: 1 });
-bookingSchema.index({ contentType: 1 });
+bookingSchema.index({ customer: 1 });
 bookingSchema.index({ createdBy: 1 });
+bookingSchema.index({ 'magazineEntries.magazine': 1 });
+bookingSchema.index({ 'magazineEntries.startIssue': 1 });
 
-// Pre-save middleware to calculate net value
-bookingSchema.pre('save', function(next) {
+// Pre-save middleware to calculate total value
+bookingSchema.pre('save', async function(next) {
   try {
-    // Ensure all values are properly converted to numbers
-    const basePrice = Number(this.basePrice) || 0;
-    const discountPercentage = Number(this.discountPercentage) || 0;
-    const discountValue = Number(this.discountValue) || 0;
-    const additionalCharges = Number(this.additionalCharges) || 0;
+    // Calculate total from all magazine entries
+    let calculatedTotal = 0;
     
-    let discountAmount = 0;
-    
-    // Apply percentage discount
-    if (discountPercentage > 0) {
-      discountAmount += (basePrice * discountPercentage) / 100;
+    for (const entry of this.magazineEntries) {
+      // Calculate entry total: listPrice - discountValue + any proportional additional charges
+      const entryTotal = entry.listPrice - (entry.discountValue || 0);
+      entry.totalPrice = entryTotal;
+      calculatedTotal += entryTotal;
     }
     
-    // Apply value discount
-    if (discountValue > 0) {
-      discountAmount += discountValue;
-    }
-    
-    // Calculate net value
-    this.netValue = Math.max(0, basePrice - discountAmount + additionalCharges);
+    // Add additional charges to total
+    this.totalValue = calculatedTotal + (this.additionalCharges || 0);
     
     next();
   } catch (error) {

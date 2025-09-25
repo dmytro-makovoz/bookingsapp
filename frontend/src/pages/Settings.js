@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Users, BookOpen, Layers, Tag } from 'lucide-react';
+import { Users, BookOpen, Layers, Tag, Calendar } from 'lucide-react';
 import Layout from '../components/Layout';
 import BusinessTypes from './BusinessTypes';
 import ContentSizes from './ContentSizes';
 import ContentTypes from './ContentTypes';
 import Magazines from './Magazines';
+import Schedules from './Schedules';
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('business-types');
@@ -33,6 +34,12 @@ const Settings = () => {
       name: 'Magazines',
       icon: BookOpen,
       component: Magazines
+    },
+    {
+      id: 'schedules',
+      name: 'Schedules',
+      icon: Calendar,
+      component: Schedules
     }
   ];
 
@@ -45,7 +52,7 @@ const Settings = () => {
           <div className="sm:flex-auto">
             <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
             <p className="mt-2 text-sm text-gray-700">
-              Manage your business types, content sizes, content types, and magazines.
+              Manage your business types, content sizes, content types, magazines, and schedules.
             </p>
           </div>
         </div>

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
-const issueSchema = new mongoose.Schema({
-  name: {
+const pageConfigurationSchema = new mongoose.Schema({
+  issueName: {
     type: String,
     required: true,
     trim: true
@@ -9,21 +9,8 @@ const issueSchema = new mongoose.Schema({
   totalPages: {
     type: Number,
     required: true,
-    min: 1
-  },
-  startDate: {
-    type: Date,
-    required: true
-  },
-  // For sorting issues chronologically
-  sortOrder: {
-    type: Number,
-    required: true
-  },
-  // Hide from booking selection
-  hidden: {
-    type: Boolean,
-    default: false
+    min: 1,
+    default: 40
   }
 });
 
@@ -33,7 +20,14 @@ const magazineSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  issues: [issueSchema],
+  // Reference to Schedule model
+  schedule: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Schedule',
+    required: true
+  },
+  // Page configurations for each issue in the schedule
+  pageConfigurations: [pageConfigurationSchema],
   // User who created this magazine (for multi-tenant support)
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,

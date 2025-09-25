@@ -4,8 +4,40 @@ const Booking = require('../models/Booking');
 const Customer = require('../models/Customer');
 const Magazine = require('../models/Magazine');
 const ContentSize = require('../models/ContentSize');
+const Schedule = require('../models/Schedule');
 const auth = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
+
+// Helper function to validate if an issue is available (not past close date)
+const validateIssueAvailability = async (issueName, userId) => {
+  const currentDate = new Date();
+  
+  // Find all schedules for the user that contain this issue name
+  const schedules = await Schedule.find({ 
+    createdBy: userId,
+    archived: false,
+    'issues.name': issueName
+  });
+
+  // If no schedules contain this issue, it's considered available (backward compatibility)
+  if (schedules.length === 0) {
+    return { available: true };
+  }
+
+  // Check if any schedule has this issue past its close date
+  for (const schedule of schedules) {
+    const issue = schedule.issues.find(i => i.name === issueName);
+    if (issue && new Date(issue.closeDate) < currentDate) {
+      return {
+        available: false,
+        message: `Issue "${issueName}" is closed. Close date was ${new Date(issue.closeDate).toDateString()}.`,
+        closedDate: issue.closeDate
+      };
+    }
+  }
+
+  return { available: true };
+};
 
 // Get all bookings for the authenticated user
 router.get('/', auth, async (req, res) => {
@@ -15,25 +47,34 @@ router.get('/', auth, async (req, res) => {
     let filter = { createdBy: req.user.id };
     
     if (customer) filter.customer = customer;
-    if (magazine) filter.magazines = magazine;
+    if (status) filter.status = status;
+    
+    // For magazine filtering, we need to search within magazineEntries
+    if (magazine) {
+      filter['magazineEntries.magazine'] = magazine;
+    }
+    
+    // New issue filtering logic: show bookings where the issue falls within the booking's date range
     if (issue) {
       filter.$or = [
-        { firstIssue: issue },
+        { 'magazineEntries.startIssue': issue },
         { 
           $and: [
-            { firstIssue: { $lte: issue } },
+            { 'magazineEntries.startIssue': { $lte: issue } },
             { 
               $or: [
-                { isOngoing: true },
-                { lastIssue: { $gte: issue } }
+                { 'magazineEntries.isOngoing': true },
+                { 'magazineEntries.finishIssue': { $gte: issue } }
               ]
             }
           ]
         }
       ];
     }
-    if (contentType) filter.contentType = contentType;
-    if (status) filter.status = status;
+    
+    if (contentType) {
+      filter['magazineEntries.contentType'] = contentType;
+    }
 
     const bookings = await Booking.find(filter)
       .populate('customer', 'name')
@@ -44,13 +85,62 @@ router.get('/', auth, async (req, res) => {
           select: 'section'
         }
       })
-      .populate('magazines', 'name')
-      .populate('contentSize', 'description size')
+      .populate({
+        path: 'magazineEntries.magazine',
+        select: 'name schedule',
+        populate: {
+          path: 'schedule',
+          select: 'name issues'
+        }
+      })
+      .populate({
+        path: 'magazineEntries.contentSize',
+        select: 'description size'
+      })
       .sort({ createdAt: -1 });
 
     res.json(bookings);
   } catch (error) {
     console.error('Error fetching bookings:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get current issue for filtering (determines which issue to show by default)
+router.get('/current-issue', auth, async (req, res) => {
+  try {
+    const Schedule = require('../models/Schedule');
+    
+    // Get all schedules for the user
+    const schedules = await Schedule.find({ 
+      createdBy: req.user.id,
+      archived: false 
+    });
+
+    if (schedules.length === 0) {
+      return res.json({ currentIssue: null });
+    }
+
+    const currentDate = new Date();
+    let currentIssue = null;
+    let earliestCloseDate = null;
+
+    // Find the first issue across all schedules that hasn't passed its close date
+    for (const schedule of schedules) {
+      for (const issue of schedule.issues) {
+        const issueCloseDate = new Date(issue.closeDate);
+        if (issueCloseDate >= currentDate) {
+          if (!earliestCloseDate || issueCloseDate < earliestCloseDate) {
+            earliestCloseDate = issueCloseDate;
+            currentIssue = issue.name;
+          }
+        }
+      }
+    }
+
+    res.json({ currentIssue });
+  } catch (error) {
+    console.error('Error getting current issue:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -70,8 +160,14 @@ router.get('/:id', auth, async (req, res) => {
           select: 'section'
         }
       })
-      .populate('magazines', 'name')
-      .populate('contentSize', 'description size');
+      .populate({
+        path: 'magazineEntries.magazine',
+        select: 'name'
+      })
+      .populate({
+        path: 'magazineEntries.contentSize',
+        select: 'description size'
+      });
     
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
@@ -84,17 +180,45 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// Create a new booking
+// Get bookings by customer (for the table interface)
+router.get('/customer/:customerId', auth, async (req, res) => {
+  try {
+    const bookings = await Booking.find({ 
+      customer: req.params.customerId, 
+      createdBy: req.user.id 
+    })
+      .populate('customer', 'name')
+      .populate({
+        path: 'magazineEntries.magazine',
+        select: 'name schedule',
+        populate: {
+          path: 'schedule',
+          select: 'name issues'
+        }
+      })
+      .populate({
+        path: 'magazineEntries.contentSize',
+        select: 'description size'
+      })
+      .sort({ createdAt: -1 });
+
+    res.json(bookings);
+  } catch (error) {
+    console.error('Error fetching customer bookings:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Create a new booking (table-based with magazine entries)
 router.post('/', [
   auth,
   body('customer').notEmpty().withMessage('Customer is required'),
-  body('contentSize').notEmpty().withMessage('Content size is required'),
-  body('magazines').isArray({ min: 1 }).withMessage('At least one magazine is required'),
-  body('contentType').isIn(['Advert', 'Article', 'Puzzle', 'Advertorial', 'Front Cover', 'In-house']).withMessage('Valid content type is required'),
-  body('basePrice').isFloat({ min: 0 }).withMessage('Base price must be a positive number'),
-  body('firstIssue').trim().notEmpty().withMessage('First issue is required'),
-  body('discountPercentage').optional().isFloat({ min: 0, max: 100 }),
-  body('discountValue').optional().isFloat({ min: 0 }),
+  body('magazineEntries').isArray({ min: 1 }).withMessage('At least one magazine entry is required'),
+  body('magazineEntries.*.magazine').notEmpty().withMessage('Magazine is required for each entry'),
+  body('magazineEntries.*.contentSize').notEmpty().withMessage('Content size is required for each entry'),
+  body('magazineEntries.*.contentType').notEmpty().withMessage('Content type is required for each entry'),
+  body('magazineEntries.*.listPrice').isFloat({ min: 0 }).withMessage('List price must be a positive number'),
+  body('magazineEntries.*.startIssue').trim().notEmpty().withMessage('Start issue is required for each entry'),
   body('additionalCharges').optional().isFloat({ min: 0 })
 ], async (req, res) => {
   try {
@@ -105,70 +229,70 @@ router.post('/', [
 
     const {
       customer,
-      contentSize,
-      magazines,
-      contentType,
-      basePrice,
-      discountPercentage = 0,
-      discountValue = 0,
+      magazineEntries,
       additionalCharges = 0,
-      firstIssue,
-      lastIssue,
-      isOngoing = false,
-      note,
-      netValue
+      notes
     } = req.body;
 
-    // Verify customer, content size, and magazines belong to the user
-    const [customerDoc, contentSizeDoc, magazineDocs] = await Promise.all([
-      Customer.findOne({ _id: customer, createdBy: req.user.id }),
-      ContentSize.findOne({ _id: contentSize, createdBy: req.user.id }),
-      Magazine.find({ _id: { $in: magazines }, createdBy: req.user.id })
-    ]);
-
+    // Verify customer belongs to the user
+    const customerDoc = await Customer.findOne({ _id: customer, createdBy: req.user.id });
     if (!customerDoc) {
       return res.status(400).json({ message: 'Customer not found' });
     }
 
-    if (!contentSizeDoc) {
-      return res.status(400).json({ message: 'Content size not found' });
-    }
+    // Validate each magazine entry
+    for (const entry of magazineEntries) {
+      // Verify magazine and content size belong to the user
+      const [magazineDoc, contentSizeDoc] = await Promise.all([
+        Magazine.findOne({ _id: entry.magazine, createdBy: req.user.id }),
+        ContentSize.findOne({ _id: entry.contentSize, createdBy: req.user.id })
+      ]);
 
-    if (magazineDocs.length !== magazines.length) {
-      return res.status(400).json({ message: 'One or more magazines not found' });
+      if (!magazineDoc) {
+        return res.status(400).json({ message: 'One or more magazines not found' });
+      }
+
+      if (!contentSizeDoc) {
+        return res.status(400).json({ message: 'One or more content sizes not found' });
+      }
+
+      // Validate issue availability based on schedule close dates
+      const startIssueValidation = await validateIssueAvailability(entry.startIssue, req.user.id);
+      if (!startIssueValidation.available) {
+        return res.status(400).json({ message: startIssueValidation.message });
+      }
+
+      // Also validate finishIssue if it's provided and not ongoing
+      if (!entry.isOngoing && entry.finishIssue) {
+        const finishIssueValidation = await validateIssueAvailability(entry.finishIssue, req.user.id);
+        if (!finishIssueValidation.available) {
+          return res.status(400).json({ message: finishIssueValidation.message });
+        }
+      }
     }
 
     const booking = new Booking({
       customer,
-      contentSize,
-      magazines,
-      contentType,
-      basePrice: Number(basePrice),
-      discountPercentage: Number(discountPercentage),
-      discountValue: Number(discountValue),
+      magazineEntries: magazineEntries.map(entry => ({
+        ...entry,
+        listPrice: Number(entry.listPrice),
+        discountPercentage: Number(entry.discountPercentage) || 0,
+        discountValue: Number(entry.discountValue) || 0,
+        isOngoing: Boolean(entry.isOngoing),
+        finishIssue: entry.isOngoing ? null : entry.finishIssue
+      })),
       additionalCharges: Number(additionalCharges),
-      firstIssue,
-      lastIssue: isOngoing ? null : lastIssue,
-      isOngoing,
-      note,
-      createdBy: req.user.id,
-      netValue
+      notes,
+      createdBy: req.user.id
     });
 
     await booking.save();
     
     // Populate the response
     await booking.populate([
-      { 
-        path: 'customer', 
-        select: 'name',
-        populate: {
-          path: 'businessTypes',
-          select: 'section'
-        }
-      },
-      { path: 'magazines', select: 'name' },
-      { path: 'contentSize', select: 'description size' }
+      { path: 'customer', select: 'name' },
+      { path: 'magazineEntries.magazine', select: 'name' },
+      { path: 'magazineEntries.contentSize', select: 'description size' }
     ]);
 
     res.status(201).json(booking);
@@ -178,17 +302,16 @@ router.post('/', [
   }
 });
 
-// Update a booking
+// Update a booking (table-based with magazine entries)
 router.put('/:id', [
   auth,
   body('customer').notEmpty().withMessage('Customer is required'),
-  body('contentSize').notEmpty().withMessage('Content size is required'),
-  body('magazines').isArray({ min: 1 }).withMessage('At least one magazine is required'),
-  body('contentType').isIn(['Advert', 'Article', 'Puzzle', 'Advertorial', 'Front Cover', 'In-house']).withMessage('Valid content type is required'),
-  body('basePrice').isFloat({ min: 0 }).withMessage('Base price must be a positive number'),
-  body('firstIssue').trim().notEmpty().withMessage('First issue is required'),
-  body('discountPercentage').optional().isFloat({ min: 0, max: 100 }),
-  body('discountValue').optional().isFloat({ min: 0 }),
+  body('magazineEntries').isArray({ min: 1 }).withMessage('At least one magazine entry is required'),
+  body('magazineEntries.*.magazine').notEmpty().withMessage('Magazine is required for each entry'),
+  body('magazineEntries.*.contentSize').notEmpty().withMessage('Content size is required for each entry'),
+  body('magazineEntries.*.contentType').notEmpty().withMessage('Content type is required for each entry'),
+  body('magazineEntries.*.listPrice').isFloat({ min: 0 }).withMessage('List price must be a positive number'),
+  body('magazineEntries.*.startIssue').trim().notEmpty().withMessage('Start issue is required for each entry'),
   body('additionalCharges').optional().isFloat({ min: 0 })
 ], async (req, res) => {
   try {
@@ -208,62 +331,72 @@ router.put('/:id', [
 
     const {
       customer,
-      contentSize,
-      magazines,
-      contentType,
-      basePrice,
-      discountPercentage = 0,
-      discountValue = 0,
+      magazineEntries,
       additionalCharges = 0,
-      firstIssue,
-      lastIssue,
-      isOngoing = false,
-      note,
+      notes,
       status
     } = req.body;
 
-    // Verify customer, content size, and magazines belong to the user
-    const [customerDoc, contentSizeDoc, magazineDocs] = await Promise.all([
-      Customer.findOne({ _id: customer, createdBy: req.user.id }),
-      ContentSize.findOne({ _id: contentSize, createdBy: req.user.id }),
-      Magazine.find({ _id: { $in: magazines }, createdBy: req.user.id })
-    ]);
+    // Verify customer belongs to the user
+    const customerDoc = await Customer.findOne({ _id: customer, createdBy: req.user.id });
+    if (!customerDoc) {
+      return res.status(400).json({ message: 'Customer not found' });
+    }
 
-    if (!customerDoc || !contentSizeDoc || magazineDocs.length !== magazines.length) {
-      return res.status(400).json({ message: 'Invalid customer, content size, or magazines' });
+    // Validate each magazine entry
+    for (const entry of magazineEntries) {
+      // Verify magazine and content size belong to the user
+      const [magazineDoc, contentSizeDoc] = await Promise.all([
+        Magazine.findOne({ _id: entry.magazine, createdBy: req.user.id }),
+        ContentSize.findOne({ _id: entry.contentSize, createdBy: req.user.id })
+      ]);
+
+      if (!magazineDoc) {
+        return res.status(400).json({ message: 'One or more magazines not found' });
+      }
+
+      if (!contentSizeDoc) {
+        return res.status(400).json({ message: 'One or more content sizes not found' });
+      }
+
+      // Validate issue availability based on schedule close dates
+      const startIssueValidation = await validateIssueAvailability(entry.startIssue, req.user.id);
+      if (!startIssueValidation.available) {
+        return res.status(400).json({ message: startIssueValidation.message });
+      }
+
+      // Also validate finishIssue if it's provided and not ongoing
+      if (!entry.isOngoing && entry.finishIssue) {
+        const finishIssueValidation = await validateIssueAvailability(entry.finishIssue, req.user.id);
+        if (!finishIssueValidation.available) {
+          return res.status(400).json({ message: finishIssueValidation.message });
+        }
+      }
     }
 
     // Update booking fields
     booking.customer = customer;
-    booking.contentSize = contentSize;
-    booking.magazines = magazines;
-    booking.contentType = contentType;
-    booking.basePrice = Number(basePrice);
-    booking.discountPercentage = Number(discountPercentage);
-    booking.discountValue = Number(discountValue);
+    booking.magazineEntries = magazineEntries.map(entry => ({
+      ...entry,
+      listPrice: Number(entry.listPrice),
+      discountPercentage: Number(entry.discountPercentage) || 0,
+      discountValue: Number(entry.discountValue) || 0,
+      isOngoing: Boolean(entry.isOngoing),
+      finishIssue: entry.isOngoing ? null : entry.finishIssue
+    }));
     booking.additionalCharges = Number(additionalCharges);
-    booking.firstIssue = firstIssue;
-    booking.lastIssue = isOngoing ? null : lastIssue;
-    booking.isOngoing = isOngoing;
-    booking.note = note;
+    booking.notes = notes;
     if (status) booking.status = status;
 
     await booking.save();
     
     // Populate the response
     await booking.populate([
-      { 
-        path: 'customer', 
-        select: 'name',
-        populate: {
-          path: 'businessTypes',
-          select: 'section'
-        }
-      },
-      { path: 'magazines', select: 'name' },
-      { path: 'contentSize', select: 'description size' }
+      { path: 'customer', select: 'name' },
+      { path: 'magazineEntries.magazine', select: 'name' },
+      { path: 'magazineEntries.contentSize', select: 'description size' }
     ]);
-
+    
     res.json(booking);
   } catch (error) {
     console.error('Error updating booking:', error);
