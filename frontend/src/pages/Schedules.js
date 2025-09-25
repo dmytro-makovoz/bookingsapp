@@ -310,7 +310,11 @@ const Schedules = () => {
   );
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString();
+    return new Date(dateString).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    }).replace(/\s/g, '-');
   };
 
   const isCloseDatePast = (closeDate) => {

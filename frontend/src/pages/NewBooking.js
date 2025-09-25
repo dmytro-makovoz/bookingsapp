@@ -18,7 +18,7 @@ import {
   fetchMagazines, 
   fetchContentSizes 
 } from '../store/slices/bookingSlice';
-import api from '../utils/api';
+import api, { contentSizesAPI } from '../utils/api';
 import { toast } from 'react-toastify';
 
 const magazineEntrySchema = yup.object({
@@ -118,6 +118,22 @@ const NewBooking = () => {
     }
   }, [watchedCustomer, id, hasUserMadeChanges]);
 
+  // Auto-fill list price when both magazine and content size are selected
+  const handlePriceAutoFill = async (index, magazineId, contentSizeId) => {
+    if (magazineId && contentSizeId) {
+      try {
+        const response = await contentSizesAPI.getPrice(contentSizeId, magazineId);
+        if (response.data && response.data.price !== undefined) {
+          setValue(`magazineEntries.${index}.listPrice`, response.data.price);
+          setHasUserMadeChanges(true);
+        }
+      } catch (error) {
+        console.error('Error fetching price:', error);
+        // Don't show error toast for price fetching as it might not exist for all magazine/size combinations
+      }
+    }
+  };
+
   useEffect(() => {
     // Load available issues for selected magazines
     const magazineIds = watchedEntries.map(entry => entry.magazine).filter(Boolean);
@@ -182,12 +198,30 @@ const NewBooking = () => {
   };
 
   const populateFormWithBooking = (booking) => {
+    // Transform the populated magazine entries to use IDs instead of objects
+    const transformedEntries = booking.magazineEntries.map(entry => ({
+      ...entry,
+      // Extract magazine ID from populated object or use as-is if it's already an ID
+      magazine: typeof entry.magazine === 'object' ? entry.magazine._id : entry.magazine,
+      // Extract contentSize ID from populated object or use as-is if it's already an ID
+      contentSize: typeof entry.contentSize === 'object' ? entry.contentSize._id : entry.contentSize,
+    }));
+
     reset({
-      customer: booking.customer._id,
-      magazineEntries: booking.magazineEntries,
+      customer: booking.customer._id || booking.customer,
+      magazineEntries: transformedEntries,
       additionalCharges: booking.additionalCharges || 0,
       notes: booking.notes || ''
     });
+
+    // Load available issues for the selected magazines
+    const selectedMagazineIds = transformedEntries
+      .map(entry => entry.magazine)
+      .filter(Boolean);
+    
+    if (selectedMagazineIds.length > 0 && magazines.length > 0) {
+      loadAvailableIssues(selectedMagazineIds);
+    }
   };
 
   const loadAvailableIssues = async (magazineIds) => {
@@ -432,6 +466,18 @@ const NewBooking = () => {
                                     setValue(`magazineEntries.${index}.startIssue`, '');
                                     setValue(`magazineEntries.${index}.finishIssue`, '');
                                     
+                                    // Clear list price when magazine changes
+                                    setValue(`magazineEntries.${index}.listPrice`, 0);
+                                    
+                                    // Get the current content size for this row
+                                    const currentEntry = watchedEntries[index];
+                                    const contentSizeId = currentEntry?.contentSize;
+                                    
+                                    // Auto-fill price if both magazine and content size are selected
+                                    if (magazineId && contentSizeId) {
+                                      handlePriceAutoFill(index, magazineId, contentSizeId);
+                                    }
+                                    
                                     // Mark that user has made changes
                                     setHasUserMadeChanges(true);
                                     
@@ -459,6 +505,21 @@ const NewBooking = () => {
                               <td className="px-3 py-4 whitespace-nowrap">
                                 <select
                                   {...register(`magazineEntries.${index}.contentSize`)}
+                                  onChange={(e) => {
+                                    const contentSizeId = e.target.value;
+                                    setValue(`magazineEntries.${index}.contentSize`, contentSizeId);
+                                    
+                                    // Get the current magazine for this row
+                                    const currentEntry = watchedEntries[index];
+                                    const magazineId = currentEntry?.magazine;
+                                    
+                                    // Auto-fill price if both magazine and content size are selected
+                                    if (magazineId && contentSizeId) {
+                                      handlePriceAutoFill(index, magazineId, contentSizeId);
+                                    }
+                                    
+                                    setHasUserMadeChanges(true);
+                                  }}
                                   className="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                 >
                                   <option value="">Select</option>
@@ -593,33 +654,12 @@ const NewBooking = () => {
             {/* Total and Notes */}
             {selectedCustomer && (
               <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Additional Charges
-                    </label>
-                    <div className="mt-1 relative rounded-md shadow-sm">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-500 sm:text-sm">£</span>
-                      </div>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...register('additionalCharges')}
-                        className="block w-full pl-7 pr-12 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-end">
-                    <div className="text-right">
-                      <p className="text-sm text-gray-500">Total value of this booking:</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {formatCurrency(calculateTotalValue())}
-                      </p>
-                    </div>
+                <div className="flex justify-end">
+                  <div className="text-right">
+                    <p className="text-sm text-gray-500">Total value of this booking:</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {formatCurrency(calculateTotalValue())}
+                    </p>
                   </div>
                 </div>
 
