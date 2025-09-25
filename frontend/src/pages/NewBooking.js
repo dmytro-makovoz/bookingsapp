@@ -663,6 +663,28 @@ const NewBooking = () => {
                   </div>
                 </div>
 
+                {/* Additional Charges - only show when creating new booking */}
+                {!isEditMode && (
+                  <div className="mt-6">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Additional Charges
+                    </label>
+                    <div className="mt-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        {...register('additionalCharges')}
+                        className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Any additional charges for this booking (optional)
+                    </p>
+                  </div>
+                )}
+
                 <div className="mt-6">
                   <label className="block text-sm font-medium text-gray-700">
                     Additional Notes
