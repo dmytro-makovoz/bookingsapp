@@ -17,28 +17,61 @@ import {
   fetchBookings, 
   fetchCustomers, 
   fetchMagazines,
-  deleteBooking 
+  deleteBookingAsync 
 } from '../store/slices/bookingSlice';
 import { bookingsAPI, schedulesAPI } from '../utils/api';
 import { toast } from 'react-toastify';
 
 const Bookings = () => {
   const dispatch = useDispatch();
-  const { bookings, customers, magazines, loading } = useSelector((state) => state.booking);
+  const { bookings, customers, magazines } = useSelector((state) => state.booking);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredBookings, setFilteredBookings] = useState([]);
   const [selectedIssue, setSelectedIssue] = useState('');
   const [availableIssues, setAvailableIssues] = useState([]);
   const [currentIssue, setCurrentIssue] = useState(null);
   const [flattenedBookings, setFlattenedBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    dispatch(fetchBookings());
-    dispatch(fetchCustomers());
-    dispatch(fetchMagazines());
-    loadAvailableIssues();
-    loadCurrentIssue();
+    loadAllData();
   }, [dispatch]);
+
+  // Fallback to stop loading after component mounts
+  useEffect(() => {
+    const fallbackTimer = setTimeout(() => {
+      if (loading) {
+        setLoading(false);
+      }
+    }, 15000); // Stop loading after 15 seconds regardless
+
+    return () => clearTimeout(fallbackTimer);
+  }, [loading]);
+
+  const loadAllData = async () => {
+    try {
+      setLoading(true);
+      // Add timeout fallback - stop loading after 10 seconds regardless
+      const timeout = setTimeout(() => {
+        setLoading(false);
+      }, 10000);
+
+      await Promise.all([
+        dispatch(fetchBookings()),
+        dispatch(fetchCustomers()),
+        dispatch(fetchMagazines()),
+        loadAvailableIssues(),
+        loadCurrentIssue()
+      ]);
+
+      clearTimeout(timeout);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('Error loading data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Flatten bookings into individual magazine entries for the table
@@ -132,11 +165,11 @@ const Bookings = () => {
   const handleDeleteBooking = async (bookingId) => {
     if (window.confirm('Are you sure you want to delete this booking?')) {
       try {
-        dispatch(deleteBooking(bookingId));
+        await dispatch(deleteBookingAsync(bookingId)).unwrap();
         toast.success('Booking deleted successfully');
       } catch (error) {
         console.error('Error deleting booking:', error);
-        toast.error('Error deleting booking');
+        toast.error(error || 'Error deleting booking');
       }
     }
   };
@@ -234,7 +267,7 @@ const Bookings = () => {
 
         {/* Bookings Table */}
         <div className="mt-6 bg-white shadow overflow-hidden sm:rounded-md">
-          {loading ? (
+          {loading && bookings.length === 0 ? (
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <p className="text-gray-600 mt-2">Loading bookings...</p>

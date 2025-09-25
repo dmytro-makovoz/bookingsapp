@@ -8,6 +8,7 @@ import {
   leafletDeliveryAPI, 
   dashboardAPI 
 } from '../../utils/api';
+import api from '../../utils/api';
 
 // Async thunks for customers
 export const fetchCustomers = createAsyncThunk(
@@ -167,6 +168,19 @@ export const fetchPublications = createAsyncThunk(
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch publications');
+    }
+  }
+);
+
+// Delete booking thunk
+export const deleteBookingAsync = createAsyncThunk(
+  'booking/deleteBookingAsync',
+  async (bookingId, { rejectWithValue }) => {
+    try {
+      await api.delete(`/bookings/${bookingId}`);
+      return bookingId;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to delete booking');
     }
   }
 );
@@ -363,6 +377,20 @@ const bookingSlice = createSlice({
       })
       .addCase(fetchPublications.fulfilled, (state, action) => {
         state.publications = action.payload;
+      })
+      // Delete booking cases
+      .addCase(deleteBookingAsync.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteBookingAsync.fulfilled, (state, action) => {
+        state.loading = false;
+        const bookingId = action.payload;
+        state.bookings = state.bookings.filter(booking => booking._id !== bookingId);
+      })
+      .addCase(deleteBookingAsync.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });

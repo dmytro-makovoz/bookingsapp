@@ -72,8 +72,8 @@ const LeafletDelivery = () => {
   const handleEdit = (item) => {
     setEditingItem(item);
     setFormData({
-      customer: item.customer._id,
-      magazine: item.magazine._id,
+      customer: item.customer?._id,
+      magazine: item.magazine?._id,
       startIssue: item.startIssue,
       finishIssue: item.finishIssue,
       quantity: item.quantity.toString(),

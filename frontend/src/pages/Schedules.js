@@ -117,7 +117,7 @@ const ScheduleModal = ({ schedule, onClose, onSave }) => {
             <input
               type="text"
               {...register('name')}
-              placeholder="e.g., Monthly, BiMonthly"
+              placeholder="e.g. Monthly, BiMonthly"
               className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
             {errors.name && (
@@ -173,7 +173,7 @@ const ScheduleModal = ({ schedule, onClose, onSave }) => {
                         <input
                           type="text"
                           {...register(`issues.${index}.name`)}
-                          placeholder="e.g., Dec25, Jan26"
+                          placeholder="e.g. Dec25, Jan26"
                           className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         />
                         {errors.issues?.[index]?.name && (

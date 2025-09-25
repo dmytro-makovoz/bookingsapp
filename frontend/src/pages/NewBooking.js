@@ -44,7 +44,7 @@ const NewBooking = () => {
   const { id } = useParams(); // Get booking ID from URL if editing
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { customers, magazines, contentSizes, loading } = useSelector((state) => state.booking);
+  const { customers, magazines, contentSizes } = useSelector((state) => state.booking);
   
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [existingBookings, setExistingBookings] = useState([]);
@@ -52,6 +52,8 @@ const NewBooking = () => {
   const [availableIssues, setAvailableIssues] = useState({});
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingBookingId, setEditingBookingId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [hasUserMadeChanges, setHasUserMadeChanges] = useState(false);
 
   const { register, handleSubmit, control, formState: { errors }, watch, setValue, reset } = useForm({
     resolver: yupResolver(bookingSchema),
@@ -82,11 +84,25 @@ const NewBooking = () => {
   const watchedEntries = watch('magazineEntries');
 
   useEffect(() => {
-    dispatch(fetchCustomers());
-    dispatch(fetchMagazines());
-    dispatch(fetchContentSizes());
-    fetchContentTypes();
+    loadInitialData();
   }, [dispatch]);
+
+  const loadInitialData = async () => {
+    try {
+      setLoading(true);
+      await Promise.all([
+        dispatch(fetchCustomers()),
+        dispatch(fetchMagazines()),
+        dispatch(fetchContentSizes()),
+        fetchContentTypes()
+      ]);
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+      toast.error('Error loading data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     // If editing an existing booking, load it directly
@@ -96,19 +112,19 @@ const NewBooking = () => {
   }, [id]);
 
   useEffect(() => {
-    if (watchedCustomer && !id) { // Only fetch customer bookings if not editing specific booking
+    if (watchedCustomer && !id && !hasUserMadeChanges) { // Only auto-populate if user hasn't made changes
       setSelectedCustomer(watchedCustomer);
       fetchCustomerBookings(watchedCustomer);
     }
-  }, [watchedCustomer, id]);
+  }, [watchedCustomer, id, hasUserMadeChanges]);
 
   useEffect(() => {
     // Load available issues for selected magazines
     const magazineIds = watchedEntries.map(entry => entry.magazine).filter(Boolean);
-    if (magazineIds.length > 0) {
+    if (magazineIds.length > 0 && magazines.length > 0) {
       loadAvailableIssues(magazineIds);
-    }
-  }, [watchedEntries]);
+    } 
+  }, [watchedEntries, magazines]);
 
   const fetchContentTypes = async () => {
     try {
@@ -147,12 +163,14 @@ const NewBooking = () => {
       const response = await api.get(`/bookings/customer/${customerId}`);
       setExistingBookings(response.data);
       
-      // If there are existing bookings and we're not editing a specific one, populate with the latest
+      // If there are existing bookings and we're not editing a specific one, populate with the latest data for convenience
+      // but keep it in create mode (don't set editingBookingId)
       if (response.data.length > 0 && !id) {
         const latestBooking = response.data[0];
         populateFormWithBooking(latestBooking);
-        setIsEditMode(true);
-        setEditingBookingId(latestBooking._id);
+        // Don't set edit mode for new bookings - just populate for convenience
+        setIsEditMode(false);
+        setEditingBookingId(null);
       } else if (!id) {
         setIsEditMode(false);
         setEditingBookingId(null);
@@ -173,22 +191,36 @@ const NewBooking = () => {
   };
 
   const loadAvailableIssues = async (magazineIds) => {
-    const issueMap = {};
-    for (const magazineId of magazineIds) {
-      try {
-        const magazine = magazines.find(m => m._id === magazineId);
-        if (magazine && magazine.schedule && magazine.schedule.issues) {
-          const currentDate = new Date();
-          const availableIssues = magazine.schedule.issues.filter(issue => 
-            new Date(issue.closeDate) >= currentDate
-          );
-          issueMap[magazineId] = availableIssues;
+    setAvailableIssues(prev => {
+      const issueMap = { ...prev };
+      
+      for (const magazineId of magazineIds) {
+        try {
+          const magazine = magazines.find(m => m._id === magazineId);
+          if (magazine && magazine.schedule && magazine.schedule.issues) {
+            const currentDate = new Date();
+            const availableIssues = magazine.schedule.issues.filter(issue => 
+              new Date(issue.closeDate) >= currentDate
+            );
+            issueMap[magazineId] = availableIssues;
+          } else {
+            issueMap[magazineId] = [];
+          }
+        } catch (error) {
+          console.error('Error loading issues for magazine:', magazineId, error);
+          issueMap[magazineId] = [];
         }
-      } catch (error) {
-        console.error('Error loading issues for magazine:', magazineId, error);
       }
-    }
-    setAvailableIssues(issueMap);
+      
+      const currentMagazineIds = new Set(magazineIds);
+      Object.keys(issueMap).forEach(id => {
+        if (!currentMagazineIds.has(id)) {
+          delete issueMap[id];
+        }
+      });
+      
+      return issueMap;
+    });
   };
 
   const addRow = () => {
@@ -203,23 +235,32 @@ const NewBooking = () => {
       finishIssue: '',
       isOngoing: false
     });
+    setHasUserMadeChanges(true); // Mark that user has made changes
   };
 
   const copyRow = (index) => {
     const rowToCopy = watchedEntries[index];
     append({ ...rowToCopy });
+    setHasUserMadeChanges(true); // Mark that user has made changes
   };
 
   const deleteRow = (index) => {
     if (fields.length > 1) {
       remove(index);
+      setHasUserMadeChanges(true); // Mark that user has made changes
     }
   };
 
   const calculateRowTotal = (entry) => {
     const listPrice = Number(entry.listPrice) || 0;
+    const discountPercentage = Number(entry.discountPercentage) || 0;
     const discountValue = Number(entry.discountValue) || 0;
-    return Math.max(0, listPrice - discountValue);
+    
+    // Apply percentage discount first, then absolute discount
+    const afterPercentageDiscount = listPrice * (1 - discountPercentage / 100);
+    const finalPrice = afterPercentageDiscount - discountValue;
+    
+    return Math.max(0, finalPrice);
   };
 
   const calculateTotalValue = () => {
@@ -238,6 +279,7 @@ const NewBooking = () => {
           listPrice: Number(entry.listPrice),
           discountPercentage: Number(entry.discountPercentage) || 0,
           discountValue: Number(entry.discountValue) || 0,
+          totalPrice: calculateRowTotal(entry), // Calculate total price for each entry
           isOngoing: Boolean(entry.isOngoing)
         })),
         additionalCharges: Number(data.additionalCharges) || 0,
@@ -253,6 +295,8 @@ const NewBooking = () => {
         toast.success('Booking created successfully');
       }
 
+      // Reset the flag after successful submission
+      setHasUserMadeChanges(false);
       navigate('/bookings');
     } catch (error) {
       console.error('Error saving booking:', error);
@@ -261,7 +305,6 @@ const NewBooking = () => {
   };
 
   const formatCurrency = (value) => `£${(value || 0).toFixed(2)}`;
-
   return (
     <Layout>
       <div className="min-h-screen bg-gray-50 py-8">
@@ -375,12 +418,33 @@ const NewBooking = () => {
                         {fields.map((field, index) => {
                           const entry = watchedEntries[index] || {};
                           const magazineIssues = availableIssues[entry.magazine] || [];
-                          
                           return (
                             <tr key={field.id}>
                               <td className="px-3 py-4 whitespace-nowrap">
                                 <select
                                   {...register(`magazineEntries.${index}.magazine`)}
+                                  onChange={(e) => {
+                                    const magazineId = e.target.value;
+                                    // Update form value
+                                    setValue(`magazineEntries.${index}.magazine`, magazineId);
+                                    
+                                    // Clear start and finish issues when magazine changes
+                                    setValue(`magazineEntries.${index}.startIssue`, '');
+                                    setValue(`magazineEntries.${index}.finishIssue`, '');
+                                    
+                                    // Mark that user has made changes
+                                    setHasUserMadeChanges(true);
+                                    
+                                    // Get all currently selected magazines and load their issues
+                                    const currentEntries = watch('magazineEntries');
+                                    const allMagazineIds = currentEntries
+                                      .map((entry, i) => i === index ? magazineId : entry.magazine)
+                                      .filter(Boolean);
+                                    
+                                    if (allMagazineIds.length > 0) {
+                                      loadAvailableIssues(allMagazineIds);
+                                    }
+                                  }}
                                   className="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                 >
                                   <option value="">Select</option>

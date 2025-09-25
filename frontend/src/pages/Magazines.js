@@ -140,7 +140,7 @@ const MagazineModal = ({ magazine, onClose, onSave }) => {
             <input
               type="text"
               {...register('name')}
-              placeholder="e.g., Local Advertiser"
+              placeholder="e.g. Local Advertiser"
               className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
             {errors.name && (
@@ -286,14 +286,45 @@ const MagazineModal = ({ magazine, onClose, onSave }) => {
 
 const Magazines = () => {
   const dispatch = useDispatch();
-  const { magazines, loading } = useSelector((state) => state.booking);
+  const { magazines } = useSelector((state) => state.booking);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMagazine, setSelectedMagazine] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    dispatch(fetchMagazines());
+    loadAllData();
   }, [dispatch]);
+
+  // Fallback to stop loading after component mounts
+  useEffect(() => {
+    const fallbackTimer = setTimeout(() => {
+      if (loading) {
+        setLoading(false);
+      }
+    }, 15000); // Stop loading after 15 seconds regardless
+
+    return () => clearTimeout(fallbackTimer);
+  }, [loading]);
+
+  const loadAllData = async () => {
+    try {
+      setLoading(true);
+      // Add timeout fallback - stop loading after 10 seconds regardless
+      const timeout = setTimeout(() => {
+        setLoading(false);
+      }, 10000);
+
+      await dispatch(fetchMagazines());
+
+      clearTimeout(timeout);
+    } catch (error) {
+      console.error('Error loading magazines:', error);
+      toast.error('Error loading magazines');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreateMagazine = async (magazineData) => {
     try {
