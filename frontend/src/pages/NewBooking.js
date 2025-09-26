@@ -462,26 +462,25 @@ const NewBooking = () => {
                                     // Update form value
                                     setValue(`magazineEntries.${index}.magazine`, magazineId);
                                     
-                                    // Clear start and finish issues when magazine changes
-                                    setValue(`magazineEntries.${index}.startIssue`, '');
-                                    setValue(`magazineEntries.${index}.finishIssue`, '');
-                                    
-                                    // Clear list price when magazine changes
-                                    setValue(`magazineEntries.${index}.listPrice`, 0);
-                                    
                                     // Get the current content size for this row
                                     const currentEntry = watchedEntries[index];
                                     const contentSizeId = currentEntry?.contentSize;
                                     
                                     // Auto-fill price if both magazine and content size are selected
+                                    // This will update the list price based on the new magazine and existing content size
                                     if (magazineId && contentSizeId) {
                                       handlePriceAutoFill(index, magazineId, contentSizeId);
+                                    } else {
+                                      // Clear list price only if we can't auto-fill
+                                      setValue(`magazineEntries.${index}.listPrice`, 0);
                                     }
                                     
                                     // Mark that user has made changes
                                     setHasUserMadeChanges(true);
                                     
                                     // Get all currently selected magazines and load their issues
+                                    // This ensures the new magazine's issues are available in the dropdown,
+                                    // but doesn't clear the current start/finish issue selections
                                     const currentEntries = watch('magazineEntries');
                                     const allMagazineIds = currentEntries
                                       .map((entry, i) => i === index ? magazineId : entry.magazine)
@@ -549,8 +548,9 @@ const NewBooking = () => {
                                   type="number"
                                   step="0.01"
                                   min="0"
+                                  disabled
                                   {...register(`magazineEntries.${index}.listPrice`)}
-                                  className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                  className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                                 />
                               </td>
 

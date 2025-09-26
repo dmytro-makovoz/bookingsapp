@@ -36,11 +36,13 @@ const Bookings = () => {
   const [selectedContentType, setSelectedContentType] = useState('');
   const [selectedStartIssue, setSelectedStartIssue] = useState('');
   const [selectedFinishIssue, setSelectedFinishIssue] = useState('');
+  const [selectedIssue, setSelectedIssue] = useState('');
 
   const [flattenedBookings, setFlattenedBookings] = useState([]);
   const [contentTypes, setContentTypes] = useState([]);
   const [uniqueStartIssues, setUniqueStartIssues] = useState([]);
   const [uniqueFinishIssues, setUniqueFinishIssues] = useState([]);
+  const [uniqueIssues, setUniqueIssues] = useState([]);
   const [loading, setLoading] = useState(true);
   
   // Pagination states
@@ -62,6 +64,16 @@ const Bookings = () => {
 
     return () => clearTimeout(fallbackTimer);
   }, [loading]);
+
+  // Function to get current issue in format "Jan26", "Feb26", etc.
+  const getCurrentIssue = () => {
+    const now = new Date();
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = monthNames[now.getMonth()];
+    const year = now.getFullYear().toString().slice(-2); // Get last 2 digits of year
+    return `${month}${year}`;
+  };
 
   const loadAllData = async () => {
     try {
@@ -121,6 +133,7 @@ const Bookings = () => {
     });
     
     setFlattenedBookings(flattened);
+    
     // Use a more robust sorting function for issues
     const sortIssues = (a, b) => {
       // Try to parse issue names like "Jan26", "Feb26", etc.
@@ -151,7 +164,22 @@ const Bookings = () => {
     
     setUniqueStartIssues(Array.from(startIssues).sort(sortIssues));
     setUniqueFinishIssues(Array.from(finishIssues).sort(sortIssues));
+    
+    // Combine start and finish issues for the general issues filter
+    const allIssues = new Set([...startIssues, ...finishIssues]);
+    setUniqueIssues(Array.from(allIssues).sort(sortIssues));
   }, [bookings]);
+
+  // Set default issue filter to current issue when issues are loaded
+  useEffect(() => {
+    if (uniqueIssues.length > 0 && !selectedIssue) {
+      const currentIssue = getCurrentIssue();
+      // Check if current issue exists in the available issues
+      if (uniqueIssues.includes(currentIssue)) {
+        setSelectedIssue(currentIssue);
+      }
+    }
+  }, [uniqueIssues, selectedIssue]);
 
   useEffect(() => {
     // Apply all filters
@@ -195,6 +223,20 @@ const Bookings = () => {
       filtered = filtered.filter(entry => entry.contentType === selectedContentType);
     }
 
+    // Apply issue filter (matches either start or finish issue)
+    if (selectedIssue) {
+      const beforeCount = filtered.length;
+      filtered = filtered.filter(entry => {
+        const entryStartIssue = entry.startIssue ? entry.startIssue.toString().trim() : '';
+        const entryFinishIssue = entry.finishIssue ? entry.finishIssue.toString().trim() : '';
+        const selectedIssueTrimmed = selectedIssue.toString().trim();
+        return entryStartIssue === selectedIssueTrimmed || entryFinishIssue === selectedIssueTrimmed;
+      });
+      if (debugEnabled) {
+        console.log(`Issue filter: ${beforeCount} -> ${filtered.length} entries`);
+      }
+    }
+
     // Apply start issue filter - ensure both values are strings and trimmed
     if (selectedStartIssue) {
       const beforeCount = filtered.length;
@@ -211,11 +253,17 @@ const Bookings = () => {
     // Apply finish issue filter - ensure both values are strings and trimmed
     if (selectedFinishIssue) {
       const beforeCount = filtered.length;
-      filtered = filtered.filter(entry => {
-        const entryFinishIssue = entry.finishIssue ? entry.finishIssue.toString().trim() : '';
-        const selectedFinishIssueTrimmed = selectedFinishIssue.toString().trim();
-        return entryFinishIssue === selectedFinishIssueTrimmed;
-      });
+      if (selectedFinishIssue === 'ONGOING') {
+        // Filter for ongoing entries
+        filtered = filtered.filter(entry => entry.isOngoing === true);
+      } else {
+        // Filter for specific finish issue
+        filtered = filtered.filter(entry => {
+          const entryFinishIssue = entry.finishIssue ? entry.finishIssue.toString().trim() : '';
+          const selectedFinishIssueTrimmed = selectedFinishIssue.toString().trim();
+          return entryFinishIssue === selectedFinishIssueTrimmed;
+        });
+      }
       if (debugEnabled) {
         console.log(`Finish issue filter: ${beforeCount} -> ${filtered.length} entries`);
       }
@@ -224,7 +272,7 @@ const Bookings = () => {
 
 
     setFilteredBookings(filtered);
-  }, [flattenedBookings, searchTerm, selectedMagazine, selectedContentSize, selectedContentType, selectedStartIssue, selectedFinishIssue]);
+  }, [flattenedBookings, searchTerm, selectedMagazine, selectedContentSize, selectedContentType, selectedIssue, selectedStartIssue, selectedFinishIssue]);
 
   // Pagination effect
   useEffect(() => {
@@ -236,7 +284,7 @@ const Bookings = () => {
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedMagazine, selectedContentSize, selectedContentType, selectedStartIssue, selectedFinishIssue]);
+  }, [searchTerm, selectedMagazine, selectedContentSize, selectedContentType, selectedIssue, selectedStartIssue, selectedFinishIssue]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
@@ -333,6 +381,14 @@ const Bookings = () => {
     setSelectedContentType('');
     setSelectedStartIssue('');
     setSelectedFinishIssue('');
+    
+    // Reset issue filter to current issue if it exists
+    const currentIssue = getCurrentIssue();
+    if (uniqueIssues.includes(currentIssue)) {
+      setSelectedIssue(currentIssue);
+    } else {
+      setSelectedIssue('');
+    }
   };
 
 
@@ -419,23 +475,24 @@ const Bookings = () => {
 
         {/* Search and Filters */}
         <div className="mt-6 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            {/* Customer Search */}
-            <div className="col-span-1 sm:col-span-2">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Search Customers"
-                />
+          {/* Customer Search Row */}
+          <div className="w-full">
+            <div className="relative max-w-md">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
               </div>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Search Customers"
+              />
             </div>
+          </div>
 
+          {/* Filters Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {/* Magazine Filter */}
             <div>
               <select
@@ -484,6 +541,22 @@ const Bookings = () => {
               </select>
             </div>
 
+            {/* Issue Filter */}
+            <div>
+              <select
+                value={selectedIssue}
+                onChange={(e) => setSelectedIssue(e.target.value)}
+                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Issues</option>
+                {uniqueIssues.map((issue) => (
+                  <option key={issue} value={issue}>
+                    {issue}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Start Issue Filter */}
             <div>
               <select
@@ -508,6 +581,7 @@ const Bookings = () => {
                 className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">All Finish Issues</option>
+                <option value="ONGOING">Ongoing</option>
                 {uniqueFinishIssues.map((issue) => (
                   <option key={issue} value={issue}>
                     {issue}
@@ -518,7 +592,7 @@ const Bookings = () => {
           </div>
 
           {/* Clear Filters */}
-          {(searchTerm || selectedMagazine || selectedContentSize || selectedContentType || selectedStartIssue || selectedFinishIssue) && (
+          {(searchTerm || selectedMagazine || selectedContentSize || selectedContentType || selectedIssue || selectedStartIssue || selectedFinishIssue) && (
             <div className="mt-4">
               <button
                 onClick={clearFilters}
@@ -532,32 +606,53 @@ const Bookings = () => {
         </div>
 
         {/* Results Summary and Export */}
-        <div className="mt-4 flex justify-between items-center">
-          <div className="text-sm text-gray-500">
-            {filteredBookings.length > 0 ? (
-              <>
-                Showing {startIndex}-{endIndex} of {filteredBookings.length} booking entries
-                                 {flattenedBookings.length !== filteredBookings.length && (
-                   <span> (filtered from {flattenedBookings.length} total)</span>
-                 )}
-                 {(searchTerm || selectedMagazine || selectedContentSize || selectedContentType || selectedStartIssue || selectedFinishIssue) && (
+        <div className="mt-4 space-y-3">
+          {/* Summary Statistics */}
+          {filteredBookings.length > 0 && (
+            <div className="bg-gray-50 rounded-lg p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="text-center">
+                <div className="text-lg font-semibold text-gray-900">{filteredBookings.length}</div>
+                <div className="text-sm text-gray-500">Total Entries</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-green-600">{formatCurrency(totalValue)}</div>
+                <div className="text-sm text-gray-500">Total Value</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-blue-600">{totalPages}</div>
+                <div className="text-sm text-gray-500">Total Pages</div>
+              </div>
+            </div>
+          )}
+
+          {/* Pagination and Export */}
+          <div className="flex justify-between items-center">
+            <div className="text-sm text-gray-500">
+              {filteredBookings.length > 0 ? (
+                <>
+                  Showing {startIndex}-{endIndex} of {filteredBookings.length} booking entries
+                                   {flattenedBookings.length !== filteredBookings.length && (
+                     <span> (filtered from {flattenedBookings.length} total)</span>
+                   )}
+                                    {(searchTerm || selectedMagazine || selectedContentSize || selectedContentType || selectedIssue || selectedStartIssue || selectedFinishIssue) && (
                    <span> with active filters</span>
                  )}
-              </>
-            ) : (
-              <>No booking entries found</>
+                </>
+              ) : (
+                <>No booking entries found</>
+              )}
+            </div>
+            
+            {filteredBookings.length > 0 && (
+              <button
+                onClick={exportToCSV}
+                className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
+              </button>
             )}
           </div>
-          
-          {filteredBookings.length > 0 && (
-            <button
-              onClick={exportToCSV}
-              className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </button>
-          )}
         </div>
         {/* Bookings Table */}
         <div className="mt-6 bg-white shadow overflow-hidden sm:rounded-md">
@@ -571,7 +666,7 @@ const Bookings = () => {
               <FileText className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">No bookings found</h3>
               <p className="mt-1 text-sm text-gray-500">
-                {searchTerm || selectedMagazine || selectedContentSize || selectedContentType || selectedStartIssue || selectedFinishIssue
+                {searchTerm || selectedMagazine || selectedContentSize || selectedContentType || selectedIssue || selectedStartIssue || selectedFinishIssue
                   ? 'Try adjusting your search or filters.' 
                   : 'Get started by creating your first booking.'}
               </p>
