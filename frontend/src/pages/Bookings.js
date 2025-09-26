@@ -363,19 +363,25 @@ const Bookings = () => {
       'Total',
       'Start Issue',
       'Finish Issue',
-      'Additional Details'
+      'Additional Notes'
     ];
 
-    const csvData = filteredBookings.map(entry => [
-      entry.customer?.name || '',
-      entry.magazine?.name || '',
-      entry.contentSize?.description || '',
-      entry.contentType || '',
-      (entry.total || 0).toFixed(2),
-      entry.startIssue || '',
-      entry.isOngoing ? 'Ongoing' : (entry.finishIssue || ''),
-      '' // Additional Details - will need to fetch from booking
-    ]);
+    const csvData = filteredBookings.map(entry => {
+      // Find the original booking to get the notes
+      const originalBooking = bookings.find(booking => booking._id === entry.bookingId);
+      const additionalNotes = originalBooking?.notes || '';
+
+      return [
+        entry.customer?.name || '',
+        entry.magazine?.name || '',
+        entry.contentSize?.description || '',
+        entry.contentType || '',
+        (entry.total || 0).toFixed(2),
+        entry.startIssue || '',
+        entry.isOngoing ? 'Ongoing' : (entry.finishIssue || ''),
+        additionalNotes
+      ];
+    });
 
     const csvContent = [
       headers.join(','),
