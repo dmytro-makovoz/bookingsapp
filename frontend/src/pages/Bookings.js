@@ -10,7 +10,9 @@ import {
   FileText,
   Plus,
   Download,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import { 
@@ -20,7 +22,7 @@ import {
   fetchContentSizes,
   deleteBookingAsync 
 } from '../store/slices/bookingSlice';
-import { bookingsAPI, schedulesAPI } from '../utils/api';
+import { bookingsAPI } from '../utils/api';
 import { toast } from 'react-toastify';
 
 const Bookings = () => {
@@ -28,19 +30,23 @@ const Bookings = () => {
   const { bookings, customers, magazines, contentSizes } = useSelector((state) => state.booking);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredBookings, setFilteredBookings] = useState([]);
-  const [selectedIssue, setSelectedIssue] = useState('');
+
   const [selectedMagazine, setSelectedMagazine] = useState('');
   const [selectedContentSize, setSelectedContentSize] = useState('');
   const [selectedContentType, setSelectedContentType] = useState('');
   const [selectedStartIssue, setSelectedStartIssue] = useState('');
   const [selectedFinishIssue, setSelectedFinishIssue] = useState('');
-  const [availableIssues, setAvailableIssues] = useState([]);
-  const [currentIssue, setCurrentIssue] = useState(null);
+
   const [flattenedBookings, setFlattenedBookings] = useState([]);
   const [contentTypes, setContentTypes] = useState([]);
   const [uniqueStartIssues, setUniqueStartIssues] = useState([]);
   const [uniqueFinishIssues, setUniqueFinishIssues] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [paginatedBookings, setPaginatedBookings] = useState([]);
 
   useEffect(() => {
     loadAllData();
@@ -70,8 +76,6 @@ const Bookings = () => {
         dispatch(fetchCustomers()),
         dispatch(fetchMagazines()),
         dispatch(fetchContentSizes()),
-        loadAvailableIssues(),
-        loadCurrentIssue(),
         loadContentTypes()
       ]);
 
@@ -106,20 +110,68 @@ const Bookings = () => {
           createdAt: booking.createdAt
         });
         
-        // Collect unique issues
-        if (entry.startIssue) startIssues.add(entry.startIssue);
-        if (entry.finishIssue && !entry.isOngoing) finishIssues.add(entry.finishIssue);
+        // Collect unique issues - ensure we're working with strings and handle undefined/null values
+        if (entry.startIssue && entry.startIssue.toString().trim()) {
+          startIssues.add(entry.startIssue.toString().trim());
+        }
+        if (entry.finishIssue && !entry.isOngoing && entry.finishIssue.toString().trim()) {
+          finishIssues.add(entry.finishIssue.toString().trim());
+        }
       });
     });
     
     setFlattenedBookings(flattened);
-    setUniqueStartIssues(Array.from(startIssues).sort());
-    setUniqueFinishIssues(Array.from(finishIssues).sort());
+    // Use a more robust sorting function for issues
+    const sortIssues = (a, b) => {
+      // Try to parse issue names like "Jan26", "Feb26", etc.
+      const monthMap = {
+        'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+        'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+      };
+      
+      const parseIssue = (issue) => {
+        const match = issue.match(/^([A-Za-z]{3})(\d{2})$/);
+        if (match) {
+          const month = monthMap[match[1]];
+          const year = parseInt(match[2]);
+          return (2000 + year) * 100 + (month || 0);
+        }
+        return issue; // fallback to string comparison
+      };
+      
+      const valA = parseIssue(a);
+      const valB = parseIssue(b);
+      
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return valA - valB;
+      }
+      
+      return a.localeCompare(b);
+    };
+    
+    setUniqueStartIssues(Array.from(startIssues).sort(sortIssues));
+    setUniqueFinishIssues(Array.from(finishIssues).sort(sortIssues));
   }, [bookings]);
 
   useEffect(() => {
     // Apply all filters
     let filtered = flattenedBookings;
+
+    // Debug logging (can be enabled by setting localStorage.debug = 'bookings')
+    const debugEnabled = localStorage.getItem('debug') === 'bookings';
+    if (debugEnabled && (selectedStartIssue || selectedFinishIssue)) {
+      console.log('Booking Filter Debug:', {
+        totalEntries: flattenedBookings.length,
+        selectedStartIssue,
+        selectedFinishIssue,
+        sampleEntries: flattenedBookings.slice(0, 3).map(e => ({
+          startIssue: e.startIssue,
+          finishIssue: e.finishIssue,
+          startIssueType: typeof e.startIssue,
+          finishIssueType: typeof e.finishIssue
+        }))
+      });
+    }
 
     // Apply search term (search customers)
     if (searchTerm) {
@@ -143,71 +195,104 @@ const Bookings = () => {
       filtered = filtered.filter(entry => entry.contentType === selectedContentType);
     }
 
-    // Apply start issue filter
+    // Apply start issue filter - ensure both values are strings and trimmed
     if (selectedStartIssue) {
-      filtered = filtered.filter(entry => entry.startIssue === selectedStartIssue);
-    }
-
-    // Apply finish issue filter
-    if (selectedFinishIssue) {
-      filtered = filtered.filter(entry => entry.finishIssue === selectedFinishIssue);
-    }
-
-    // Apply issue filtering (legacy - shows entries that span the selected issue)
-    if (selectedIssue) {
+      const beforeCount = filtered.length;
       filtered = filtered.filter(entry => {
-        // Show entries where the selected issue falls within the booking's date range
-        if (entry.startIssue === selectedIssue) return true;
-        if (entry.isOngoing && compareIssues(entry.startIssue, selectedIssue) <= 0) return true;
-        if (!entry.isOngoing && entry.finishIssue && 
-            compareIssues(entry.startIssue, selectedIssue) <= 0 && 
-            compareIssues(entry.finishIssue, selectedIssue) >= 0) return true;
-        return false;
+        const entryStartIssue = entry.startIssue ? entry.startIssue.toString().trim() : '';
+        const selectedStartIssueTrimmed = selectedStartIssue.toString().trim();
+        return entryStartIssue === selectedStartIssueTrimmed;
       });
+      if (debugEnabled) {
+        console.log(`Start issue filter: ${beforeCount} -> ${filtered.length} entries`);
+      }
     }
+
+    // Apply finish issue filter - ensure both values are strings and trimmed
+    if (selectedFinishIssue) {
+      const beforeCount = filtered.length;
+      filtered = filtered.filter(entry => {
+        const entryFinishIssue = entry.finishIssue ? entry.finishIssue.toString().trim() : '';
+        const selectedFinishIssueTrimmed = selectedFinishIssue.toString().trim();
+        return entryFinishIssue === selectedFinishIssueTrimmed;
+      });
+      if (debugEnabled) {
+        console.log(`Finish issue filter: ${beforeCount} -> ${filtered.length} entries`);
+      }
+    }
+
+
 
     setFilteredBookings(filtered);
-  }, [flattenedBookings, searchTerm, selectedIssue, selectedMagazine, selectedContentSize, selectedContentType, selectedStartIssue, selectedFinishIssue]);
+  }, [flattenedBookings, searchTerm, selectedMagazine, selectedContentSize, selectedContentType, selectedStartIssue, selectedFinishIssue]);
 
+  // Pagination effect
   useEffect(() => {
-    // Set default filter to current issue when it's loaded
-    if (currentIssue && !selectedIssue) {
-      setSelectedIssue(currentIssue);
-    }
-  }, [currentIssue, selectedIssue]);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    setPaginatedBookings(filteredBookings.slice(startIndex, endIndex));
+  }, [filteredBookings, currentPage, itemsPerPage]);
 
-  const loadAvailableIssues = async () => {
-    try {
-      const response = await schedulesAPI.getAll();
-      const allIssues = [];
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedMagazine, selectedContentSize, selectedContentType, selectedStartIssue, selectedFinishIssue]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage + 1;
+  const endIndex = Math.min(currentPage * itemsPerPage, filteredBookings.length);
+
+  // Pagination handlers
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  const handleItemsPerPageChange = (newItemsPerPage) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1);
+  };
+
+  // Generate page numbers for pagination display
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxVisiblePages = 5;
+    
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+      }
+    } else {
+      let startPage = Math.max(1, currentPage - 2);
+      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
       
-      response.data.forEach(schedule => {
-        schedule.issues.forEach(issue => {
-          if (!allIssues.some(i => i.name === issue.name)) {
-            allIssues.push({
-              name: issue.name,
-              closeDate: issue.closeDate
-            });
-          }
-        });
-      });
-
-      // Sort issues by close date
-      allIssues.sort((a, b) => new Date(a.closeDate) - new Date(b.closeDate));
-      setAvailableIssues(allIssues);
-    } catch (error) {
-      console.error('Error loading available issues:', error);
+      if (endPage - startPage < maxVisiblePages - 1) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+      }
+      
+      if (startPage > 1) {
+        pageNumbers.push(1);
+        if (startPage > 2) pageNumbers.push('...');
+      }
+      
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i);
+      }
+      
+      if (endPage < totalPages) {
+        if (endPage < totalPages - 1) pageNumbers.push('...');
+        pageNumbers.push(totalPages);
+      }
     }
+    
+    return pageNumbers;
   };
 
-  const loadCurrentIssue = async () => {
-    try {
-      const response = await bookingsAPI.getCurrentIssue();
-      setCurrentIssue(response.data.currentIssue);
-    } catch (error) {
-      console.error('Error loading current issue:', error);
-    }
-  };
+
+
+
 
   const loadContentTypes = async () => {
     try {
@@ -243,7 +328,6 @@ const Bookings = () => {
 
   const clearFilters = () => {
     setSearchTerm('');
-    setSelectedIssue('');
     setSelectedMagazine('');
     setSelectedContentSize('');
     setSelectedContentType('');
@@ -251,39 +335,7 @@ const Bookings = () => {
     setSelectedFinishIssue('');
   };
 
-  // Helper function to compare issues chronologically
-  const compareIssues = (issue1, issue2) => {
-    if (!issue1 || !issue2) return 0;
-    
-    // Helper to parse issue names like "Jan26", "Feb26", etc.
-    const parseIssue = (issue) => {
-      const monthMap = {
-        'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-        'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
-      };
-      
-      // Try to match patterns like "Jan26", "Feb26", etc.
-      const match = issue.match(/^([A-Za-z]{3})(\d{2})$/);
-      if (match) {
-        const month = monthMap[match[1]];
-        const year = parseInt(match[2]);
-        // Convert to a comparable number (assuming 20xx years)
-        return (2000 + year) * 100 + (month || 0);
-      }
-      
-      // Fallback to string comparison for non-standard formats
-      return issue.localeCompare(issue2);
-    };
-    
-    const val1 = parseIssue(issue1);
-    const val2 = parseIssue(issue2);
-    
-    if (typeof val1 === 'number' && typeof val2 === 'number') {
-      return val1 - val2;
-    }
-    
-    return issue1.localeCompare(issue2);
-  };
+
 
   const formatCurrency = (value) => `£${(value || 0).toFixed(2)}`;
 
@@ -459,27 +511,9 @@ const Bookings = () => {
             </div>
           </div>
 
-          {/* Second row with Issue Range Filter and Clear button */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-3 sm:space-y-0">
-            {/* Issue Range Filter (legacy - shows entries that span the selected issue) */}
-            <div className="flex-1 max-w-xs">
-              <select
-                value={selectedIssue}
-                onChange={(e) => setSelectedIssue(e.target.value)}
-                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Issue Range Filter</option>
-                {availableIssues.map((issue) => (
-                  <option key={issue.name} value={issue.name}>
-                    {issue.name}
-                    {currentIssue === issue.name && ' (Current)'}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Clear Filters */}
-            {(searchTerm || selectedIssue || selectedMagazine || selectedContentSize || selectedContentType || selectedStartIssue || selectedFinishIssue) && (
+          {/* Clear Filters */}
+          {(searchTerm || selectedMagazine || selectedContentSize || selectedContentType || selectedStartIssue || selectedFinishIssue) && (
+            <div className="mt-4">
               <button
                 onClick={clearFilters}
                 className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -487,19 +521,26 @@ const Bookings = () => {
                 <X className="h-4 w-4 mr-1" />
                 Clear Filters
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Results Summary and Export */}
         <div className="mt-4 flex justify-between items-center">
           <div className="text-sm text-gray-500">
-            Showing {filteredBookings.length} of {flattenedBookings.length} booking entries
-            {(searchTerm || selectedMagazine || selectedContentSize || selectedContentType || selectedStartIssue || selectedFinishIssue || selectedIssue) && (
-              <span> with active filters</span>
+            {filteredBookings.length > 0 ? (
+              <>
+                Showing {startIndex}-{endIndex} of {filteredBookings.length} booking entries
+                                 {flattenedBookings.length !== filteredBookings.length && (
+                   <span> (filtered from {flattenedBookings.length} total)</span>
+                 )}
+                 {(searchTerm || selectedMagazine || selectedContentSize || selectedContentType || selectedStartIssue || selectedFinishIssue) && (
+                   <span> with active filters</span>
+                 )}
+              </>
+            ) : (
+              <>No booking entries found</>
             )}
-            {selectedIssue && ` (Issue Range: ${selectedIssue})`}
-            {selectedIssue === currentIssue && ' (Current Issue)'}
           </div>
           
           {filteredBookings.length > 0 && (
@@ -512,25 +553,6 @@ const Bookings = () => {
             </button>
           )}
         </div>
-
-        {/* Totals Summary */}
-        {filteredBookings.length > 0 && (
-          <div className="mt-4 bg-blue-50 border border-blue-200 rounded-md p-4">
-            <div className="flex justify-between items-center text-sm">
-              <div className="flex space-x-8">
-                <div>
-                  <span className="font-medium text-blue-900">Total Value:</span>
-                  <span className="ml-2 text-blue-800 font-bold">{formatCurrency(totalValue)}</span>
-                </div>
-                <div>
-                  <span className="font-medium text-blue-900">Total Size:</span>
-                  <span className="ml-2 text-blue-800 font-bold">{totalSize.toFixed(3)} pages</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Bookings Table */}
         <div className="mt-6 bg-white shadow overflow-hidden sm:rounded-md">
           {loading && bookings.length === 0 ? (
@@ -538,12 +560,12 @@ const Bookings = () => {
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <p className="text-gray-600 mt-2">Loading bookings...</p>
             </div>
-          ) : filteredBookings.length === 0 ? (
+          ) : paginatedBookings.length === 0 ? (
             <div className="text-center py-12">
               <FileText className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">No bookings found</h3>
               <p className="mt-1 text-sm text-gray-500">
-                {searchTerm || selectedIssue 
+                {searchTerm || selectedMagazine || selectedContentSize || selectedContentType || selectedStartIssue || selectedFinishIssue
                   ? 'Try adjusting your search or filters.' 
                   : 'Get started by creating your first booking.'}
               </p>
@@ -580,7 +602,7 @@ const Bookings = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredBookings.map((entry) => (
+                  {paginatedBookings.map((entry) => (
                     <tr key={entry.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
@@ -654,10 +676,155 @@ const Bookings = () => {
               </table>
             </div>
           )}
+          
+          {flattenedBookings.length > 0 && (
+            <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+              {/* Items per page selector */}
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-700">Show</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                  className="border border-gray-300 rounded text-sm px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span className="text-sm text-gray-700">entries</span>
+              </div>
+
+              {/* Page navigation */}
+              <div className="flex items-center space-x-2">
+                {totalPages > 1 ? (
+                  <>
+                    {/* Previous button */}
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className={`inline-flex items-center px-3 py-2 border text-sm font-medium rounded-md ${
+                        currentPage === 1
+                          ? 'border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed'
+                          : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-1" />
+                      Previous
+                    </button>
+
+                    {/* Page numbers */}
+                    <div className="flex items-center space-x-1">
+                      {getPageNumbers().map((pageNum, index) => (
+                        <button
+                          key={index}
+                          onClick={() => typeof pageNum === 'number' && handlePageChange(pageNum)}
+                          disabled={pageNum === '...'}
+                          className={`inline-flex items-center px-3 py-2 border text-sm font-medium rounded-md ${
+                            pageNum === currentPage
+                              ? 'border-blue-500 bg-blue-50 text-blue-600'
+                              : pageNum === '...'
+                              ? 'border-gray-300 text-gray-400 bg-gray-100 cursor-default'
+                              : 'border-gray-300 text-gray-500 bg-white hover:bg-gray-50 hover:text-gray-700'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Next button */}
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className={`inline-flex items-center px-3 py-2 border text-sm font-medium rounded-md ${
+                        currentPage === totalPages
+                          ? 'border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed'
+                          : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-sm text-gray-500">
+                    Page 1 of 1
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </Layout>
   );
 };
 
-export default Bookings; 
+export default Bookings;
+
+// Debug function for testing issue filtering (accessible in browser console as window.debugBookingFilters)
+if (typeof window !== 'undefined') {
+  window.debugBookingFilters = () => {
+    console.log('=== Booking Filters Debug ===');
+    
+    // Get Redux state
+    const state = window.__REDUX_DEVTOOLS_EXTENSION__ ? 
+      window.__REDUX_DEVTOOLS_EXTENSION__.getState?.() || {} : {};
+    
+    const bookings = state.booking?.bookings || [];
+    
+    console.log('Total bookings:', bookings.length);
+    
+    // Flatten bookings like the component does
+    const flattened = [];
+    const startIssues = new Set();
+    const finishIssues = new Set();
+    
+    bookings.forEach(booking => {
+      booking.magazineEntries?.forEach(entry => {
+        flattened.push({
+          id: `${booking._id}_${entry._id || entry.magazine}`,
+          startIssue: entry.startIssue,
+          finishIssue: entry.finishIssue,
+          isOngoing: entry.isOngoing,
+          customerName: booking.customer?.name
+        });
+        
+        if (entry.startIssue && entry.startIssue.toString().trim()) {
+          startIssues.add(entry.startIssue.toString().trim());
+        }
+        if (entry.finishIssue && !entry.isOngoing && entry.finishIssue.toString().trim()) {
+          finishIssues.add(entry.finishIssue.toString().trim());
+        }
+      });
+    });
+    
+    console.log('Flattened entries:', flattened.length);
+    console.log('Unique start issues:', Array.from(startIssues));
+    console.log('Unique finish issues:', Array.from(finishIssues));
+    console.log('Sample entries:', flattened.slice(0, 5));
+    
+    // Test filtering
+    const testStartIssue = Array.from(startIssues)[0];
+    if (testStartIssue) {
+      const filtered = flattened.filter(entry => {
+        const entryStartIssue = entry.startIssue ? entry.startIssue.toString().trim() : '';
+        return entryStartIssue === testStartIssue;
+      });
+      console.log(`Test start issue filter "${testStartIssue}":`, filtered.length, 'results');
+    }
+    
+    const testFinishIssue = Array.from(finishIssues)[0];
+    if (testFinishIssue) {
+      const filtered = flattened.filter(entry => {
+        const entryFinishIssue = entry.finishIssue ? entry.finishIssue.toString().trim() : '';
+        return entryFinishIssue === testFinishIssue;
+      });
+      console.log(`Test finish issue filter "${testFinishIssue}":`, filtered.length, 'results');
+    }
+    
+    console.log('To enable detailed filtering debug, run: localStorage.setItem("debug", "bookings")');
+    console.log('=== End Debug ===');
+  };
+} 
