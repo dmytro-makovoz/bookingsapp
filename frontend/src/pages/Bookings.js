@@ -22,7 +22,7 @@ import {
   fetchContentSizes,
   deleteBookingAsync 
 } from '../store/slices/bookingSlice';
-import { bookingsAPI } from '../utils/api';
+import api, { bookingsAPI } from '../utils/api';
 import { toast } from 'react-toastify';
 
 const Bookings = () => {
@@ -37,12 +37,14 @@ const Bookings = () => {
   const [selectedStartIssue, setSelectedStartIssue] = useState('');
   const [selectedFinishIssue, setSelectedFinishIssue] = useState('');
   const [selectedIssue, setSelectedIssue] = useState('');
+  const [hasSetDefaultIssue, setHasSetDefaultIssue] = useState(false);
 
   const [flattenedBookings, setFlattenedBookings] = useState([]);
   const [contentTypes, setContentTypes] = useState([]);
   const [uniqueStartIssues, setUniqueStartIssues] = useState([]);
   const [uniqueFinishIssues, setUniqueFinishIssues] = useState([]);
   const [uniqueIssues, setUniqueIssues] = useState([]);
+  const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   
   // Pagination states
@@ -65,14 +67,45 @@ const Bookings = () => {
     return () => clearTimeout(fallbackTimer);
   }, [loading]);
 
-  // Function to get current issue in format "Jan26", "Feb26", etc.
+  // Function to get current issue based on schedule finish dates
   const getCurrentIssue = () => {
     const now = new Date();
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const month = monthNames[now.getMonth()];
-    const year = now.getFullYear().toString().slice(-2); // Get last 2 digits of year
-    return `${month}${year}`;
+    let currentIssue = null;
+    let closestDate = null;
+
+    // Go through all schedules and their issues to find the closest finish date
+    schedules.forEach(schedule => {
+      schedule.issues?.forEach(issue => {
+        const finishDate = new Date(issue.closeDate);
+        
+        // Find the issue whose finish date is closest to today (either just past or upcoming)
+        if (!closestDate || Math.abs(finishDate - now) < Math.abs(closestDate - now)) {
+          closestDate = finishDate;
+          currentIssue = issue.name;
+        }
+      });
+    });
+
+    // Fallback to calendar-based current issue if no schedule data found
+    if (!currentIssue) {
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const month = monthNames[now.getMonth()];
+      const year = now.getFullYear().toString().slice(-2);
+      currentIssue = `${month}${year}`;
+    }
+
+    return currentIssue;
+  };
+
+  // Load schedules to determine current issue
+  const loadSchedules = async () => {
+    try {
+      const response = await api.get('/schedules');
+      setSchedules(response.data);
+    } catch (error) {
+      console.error('Error loading schedules:', error);
+    }
   };
 
   const loadAllData = async () => {
@@ -88,7 +121,8 @@ const Bookings = () => {
         dispatch(fetchCustomers()),
         dispatch(fetchMagazines()),
         dispatch(fetchContentSizes()),
-        loadContentTypes()
+        loadContentTypes(),
+        loadSchedules()
       ]);
 
       clearTimeout(timeout);
@@ -170,16 +204,17 @@ const Bookings = () => {
     setUniqueIssues(Array.from(allIssues).sort(sortIssues));
   }, [bookings]);
 
-  // Set default issue filter to current issue when issues are loaded
+  // Set default issue filter to current issue when issues are first loaded
   useEffect(() => {
-    if (uniqueIssues.length > 0 && !selectedIssue) {
+    if (uniqueIssues.length > 0 && !hasSetDefaultIssue) {
       const currentIssue = getCurrentIssue();
       // Check if current issue exists in the available issues
-      if (uniqueIssues.includes(currentIssue)) {
+      if (currentIssue && uniqueIssues.includes(currentIssue)) {
         setSelectedIssue(currentIssue);
       }
+      setHasSetDefaultIssue(true);
     }
-  }, [uniqueIssues, selectedIssue]);
+  }, [uniqueIssues, schedules, hasSetDefaultIssue]);
 
   useEffect(() => {
     // Apply all filters
@@ -384,7 +419,7 @@ const Bookings = () => {
     
     // Reset issue filter to current issue if it exists
     const currentIssue = getCurrentIssue();
-    if (uniqueIssues.includes(currentIssue)) {
+    if (currentIssue && uniqueIssues.includes(currentIssue)) {
       setSelectedIssue(currentIssue);
     } else {
       setSelectedIssue('');
@@ -549,11 +584,15 @@ const Bookings = () => {
                 className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">All Issues</option>
-                {uniqueIssues.map((issue) => (
-                  <option key={issue} value={issue}>
-                    {issue}
-                  </option>
-                ))}
+                {uniqueIssues.map((issue) => {
+                  const currentIssue = getCurrentIssue();
+                  const isCurrent = currentIssue && issue === currentIssue;
+                  return (
+                    <option key={issue} value={issue}>
+                      {isCurrent ? `${issue} (Current)` : issue}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
