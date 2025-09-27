@@ -67,6 +67,49 @@ const Bookings = () => {
     return () => clearTimeout(fallbackTimer);
   }, [loading]);
 
+  // Helper function to compare issue names chronologically  
+  const compareIssues = (issueA, issueB) => {
+    const monthMap = {
+      'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+      'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+    };
+    
+    const parseIssue = (issue) => {
+      const match = issue.match(/^([A-Za-z]{3})(\d{2})$/);
+      if (match) {
+        const month = monthMap[match[1]];
+        const year = parseInt(match[2]);
+        return (2000 + year) * 100 + (month || 0);
+      }
+      return issue; // fallback to string comparison
+    };
+    
+    const valA = parseIssue(issueA);
+    const valB = parseIssue(issueB);
+    
+    if (typeof valA === 'number' && typeof valB === 'number') {
+      return valA - valB;
+    }
+    
+    return issueA.localeCompare(issueB);
+  };
+
+  // Helper function to check if a booking is active during a specific issue
+  const isBookingActiveInIssue = (booking, targetIssue) => {
+    const startIssue = booking.startIssue ? booking.startIssue.toString().trim() : '';
+    const finishIssue = booking.finishIssue ? booking.finishIssue.toString().trim() : '';
+    const targetIssueTrimmed = targetIssue.toString().trim();
+    
+    // If booking is ongoing, it's active if it started at or before the target issue
+    if (booking.isOngoing) {
+      return compareIssues(startIssue, targetIssueTrimmed) <= 0;
+    }
+    
+    // For non-ongoing bookings, check if target issue falls within the start-finish range
+    return compareIssues(startIssue, targetIssueTrimmed) <= 0 && 
+           compareIssues(targetIssueTrimmed, finishIssue) <= 0;
+  };
+
   // Function to get current issue based on issue periods (start to end date)
   const getCurrentIssue = () => {
     const now = new Date();
@@ -248,33 +291,8 @@ const Bookings = () => {
     
     setFlattenedBookings(flattened);
     
-    // Use a more robust sorting function for issues
-    const sortIssues = (a, b) => {
-      // Try to parse issue names like "Jan26", "Feb26", etc.
-      const monthMap = {
-        'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-        'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
-      };
-      
-      const parseIssue = (issue) => {
-        const match = issue.match(/^([A-Za-z]{3})(\d{2})$/);
-        if (match) {
-          const month = monthMap[match[1]];
-          const year = parseInt(match[2]);
-          return (2000 + year) * 100 + (month || 0);
-        }
-        return issue; // fallback to string comparison
-      };
-      
-      const valA = parseIssue(a);
-      const valB = parseIssue(b);
-      
-      if (typeof valA === 'number' && typeof valB === 'number') {
-        return valA - valB;
-      }
-      
-      return a.localeCompare(b);
-    };
+    // Use the helper function for sorting issues
+    const sortIssues = (a, b) => compareIssues(a, b);
     
     setUniqueStartIssues(Array.from(startIssues).sort(sortIssues));
     setUniqueFinishIssues(Array.from(finishIssues).sort(sortIssues));
@@ -300,22 +318,6 @@ const Bookings = () => {
     // Apply all filters
     let filtered = flattenedBookings;
 
-    // Debug logging (can be enabled by setting localStorage.debug = 'bookings')
-    const debugEnabled = localStorage.getItem('debug') === 'bookings';
-    if (debugEnabled && (selectedStartIssue || selectedFinishIssue)) {
-      console.log('Booking Filter Debug:', {
-        totalEntries: flattenedBookings.length,
-        selectedStartIssue,
-        selectedFinishIssue,
-        sampleEntries: flattenedBookings.slice(0, 3).map(e => ({
-          startIssue: e.startIssue,
-          finishIssue: e.finishIssue,
-          startIssueType: typeof e.startIssue,
-          finishIssueType: typeof e.finishIssue
-        }))
-      });
-    }
-
     // Apply search term (search customers)
     if (searchTerm) {
       filtered = filtered.filter(entry =>
@@ -338,23 +340,15 @@ const Bookings = () => {
       filtered = filtered.filter(entry => entry.contentType === selectedContentType);
     }
 
-    // Apply issue filter (matches either start or finish issue)
+    // Apply issue filter (shows bookings active during the selected issue period)
     if (selectedIssue) {
-      const beforeCount = filtered.length;
       filtered = filtered.filter(entry => {
-        const entryStartIssue = entry.startIssue ? entry.startIssue.toString().trim() : '';
-        const entryFinishIssue = entry.finishIssue ? entry.finishIssue.toString().trim() : '';
-        const selectedIssueTrimmed = selectedIssue.toString().trim();
-        return entryStartIssue === selectedIssueTrimmed || entryFinishIssue === selectedIssueTrimmed;
+        return isBookingActiveInIssue(entry, selectedIssue);
       });
-      if (debugEnabled) {
-        console.log(`Issue filter: ${beforeCount} -> ${filtered.length} entries`);
-      }
     }
 
     // Apply start issue filter - ensure both values are strings and trimmed
     if (selectedStartIssue) {
-      const beforeCount = filtered.length;
       filtered = filtered.filter(entry => {
         const entryStartIssue = entry.startIssue ? entry.startIssue.toString().trim() : '';
         const selectedStartIssueTrimmed = selectedStartIssue.toString().trim();
@@ -364,7 +358,6 @@ const Bookings = () => {
 
     // Apply finish issue filter - ensure both values are strings and trimmed
     if (selectedFinishIssue) {
-      const beforeCount = filtered.length;
       if (selectedFinishIssue === 'ONGOING') {
         // Filter for ongoing entries
         filtered = filtered.filter(entry => entry.isOngoing === true);
@@ -375,9 +368,6 @@ const Bookings = () => {
           const selectedFinishIssueTrimmed = selectedFinishIssue.toString().trim();
           return entryFinishIssue === selectedFinishIssueTrimmed;
         });
-      }
-      if (debugEnabled) {
-        console.log(`Finish issue filter: ${beforeCount} -> ${filtered.length} entries`);
       }
     }
 
