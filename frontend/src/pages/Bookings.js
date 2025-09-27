@@ -12,7 +12,9 @@ import {
   Download,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import { 
@@ -51,6 +53,10 @@ const Bookings = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [paginatedBookings, setPaginatedBookings] = useState([]);
+  
+  // Sorting states
+  const [sortField, setSortField] = useState('');
+  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
 
   useEffect(() => {
     loadAllData();
@@ -108,6 +114,100 @@ const Bookings = () => {
     // For non-ongoing bookings, check if target issue falls within the start-finish range
     return compareIssues(startIssue, targetIssueTrimmed) <= 0 && 
            compareIssues(targetIssueTrimmed, finishIssue) <= 0;
+  };
+
+  // Sorting functions
+  const handleSort = (field) => {
+    if (sortField === field) {
+      // Toggle direction if same field
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New field, default to ascending
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortedBookings = (bookings) => {
+    if (!sortField) return bookings;
+
+    return [...bookings].sort((a, b) => {
+      let aValue, bValue;
+
+      switch (sortField) {
+        case 'customer':
+          aValue = a.customer?.name || '';
+          bValue = b.customer?.name || '';
+          break;
+        case 'magazine':
+          aValue = a.magazine?.name || '';
+          bValue = b.magazine?.name || '';
+          break;
+        case 'size':
+          aValue = a.contentSize?.description || '';
+          bValue = b.contentSize?.description || '';
+          break;
+        case 'type':
+          aValue = a.contentType || '';
+          bValue = b.contentType || '';
+          break;
+        case 'total':
+          aValue = a.total || 0;
+          bValue = b.total || 0;
+          break;
+        case 'start':
+          aValue = a.startIssue || '';
+          bValue = b.startIssue || '';
+          // Use issue comparison for proper chronological sorting
+          if (aValue && bValue) {
+            return sortDirection === 'asc' 
+              ? compareIssues(aValue, bValue)
+              : compareIssues(bValue, aValue);
+          }
+          break;
+        case 'finish':
+          // Handle ongoing bookings specially
+          if (a.isOngoing && !b.isOngoing) return sortDirection === 'asc' ? 1 : -1;
+          if (!a.isOngoing && b.isOngoing) return sortDirection === 'asc' ? -1 : 1;
+          if (a.isOngoing && b.isOngoing) return 0;
+          
+          aValue = a.finishIssue || '';
+          bValue = b.finishIssue || '';
+          // Use issue comparison for proper chronological sorting
+          if (aValue && bValue) {
+            return sortDirection === 'asc' 
+              ? compareIssues(aValue, bValue)
+              : compareIssues(bValue, aValue);
+          }
+          break;
+        default:
+          return 0;
+      }
+
+      // For non-issue fields, use standard comparison
+      if (sortField !== 'start' && sortField !== 'finish') {
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+        }
+        
+        const comparison = aValue.toString().localeCompare(bValue.toString(), undefined, { 
+          numeric: true, 
+          sensitivity: 'base' 
+        });
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }
+
+      return 0;
+    });
+  };
+
+  const getSortIcon = (field) => {
+    if (sortField !== field) {
+      return <div className="w-4 h-4"></div>; // Invisible placeholder
+    }
+    return sortDirection === 'asc' 
+      ? <ChevronUp className="w-4 h-4" />
+      : <ChevronDown className="w-4 h-4" />;
   };
 
   // Function to get current issue based on issue periods (start to end date)
@@ -376,17 +476,18 @@ const Bookings = () => {
     setFilteredBookings(filtered);
   }, [flattenedBookings, searchTerm, selectedMagazine, selectedContentSize, selectedContentType, selectedIssue, selectedStartIssue, selectedFinishIssue]);
 
-  // Pagination effect
+  // Pagination effect (with sorting applied)
   useEffect(() => {
+    const sortedBookings = getSortedBookings(filteredBookings);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    setPaginatedBookings(filteredBookings.slice(startIndex, endIndex));
-  }, [filteredBookings, currentPage, itemsPerPage]);
+    setPaginatedBookings(sortedBookings.slice(startIndex, endIndex));
+  }, [filteredBookings, currentPage, itemsPerPage, sortField, sortDirection]);
 
-  // Reset to first page when filters change
+  // Reset to first page when filters or sorting changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedMagazine, selectedContentSize, selectedContentType, selectedIssue, selectedStartIssue, selectedFinishIssue]);
+  }, [searchTerm, selectedMagazine, selectedContentSize, selectedContentType, selectedIssue, selectedStartIssue, selectedFinishIssue, sortField, sortDirection]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
@@ -483,6 +584,8 @@ const Bookings = () => {
     setSelectedContentType('');
     setSelectedStartIssue('');
     setSelectedFinishIssue('');
+    setSortField('');
+    setSortDirection('asc');
     
     // Reset issue filter to current issue if it exists
     const currentIssue = getCurrentIssue();
@@ -782,26 +885,68 @@ const Bookings = () => {
               <table className="min-w-full divide-y divide-gray-300">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      Customer
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('customer')}
+                    >
+                      <div className="flex items-center justify-between">
+                        Customer
+                        {getSortIcon('customer')}
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      Magazine
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('magazine')}
+                    >
+                      <div className="flex items-center justify-between">
+                        Magazine
+                        {getSortIcon('magazine')}
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      Size
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('size')}
+                    >
+                      <div className="flex items-center justify-between">
+                        Size
+                        {getSortIcon('size')}
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      Type
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('type')}
+                    >
+                      <div className="flex items-center justify-between">
+                        Type
+                        {getSortIcon('type')}
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      Total
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('total')}
+                    >
+                      <div className="flex items-center justify-between">
+                        Total
+                        {getSortIcon('total')}
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      Start
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('start')}
+                    >
+                      <div className="flex items-center justify-between">
+                        Start
+                        {getSortIcon('start')}
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      Finish
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('finish')}
+                    >
+                      <div className="flex items-center justify-between">
+                        Finish
+                        {getSortIcon('finish')}
+                      </div>
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wide">
                       Actions
