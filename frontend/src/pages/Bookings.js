@@ -67,26 +67,107 @@ const Bookings = () => {
     return () => clearTimeout(fallbackTimer);
   }, [loading]);
 
-  // Function to get current issue based on schedule finish dates
+  // Function to get current issue based on issue periods (start to end date)
   const getCurrentIssue = () => {
     const now = new Date();
     let currentIssue = null;
-    let closestDate = null;
-
-    // Go through all schedules and their issues to find the closest finish date
+    // Go through all schedules and their issues to find the current period
     schedules.forEach(schedule => {
-      schedule.issues?.forEach(issue => {
-        const finishDate = new Date(issue.closeDate);
-        
-        // Find the issue whose finish date is closest to today (either just past or upcoming)
-        if (!closestDate || Math.abs(finishDate - now) < Math.abs(closestDate - now)) {
-          closestDate = finishDate;
-          currentIssue = issue.name;
+      if (!schedule.issues || schedule.issues.length === 0) return;
+
+      // Sort issues by sortOrder to ensure proper chronological order
+      const sortedIssues = [...schedule.issues].sort((a, b) => a.sortOrder - b.sortOrder);
+
+      // Calculate periods for each issue
+      for (let i = 0; i < sortedIssues.length; i++) {
+        const issue = sortedIssues[i];
+        const closeDate = new Date(issue.closeDate);
+
+        let startDate;
+        if (i === 0) {
+          if (sortedIssues.length > 1) {
+            // Calculate average period from the available issues
+            const totalPeriods = sortedIssues.length - 1;
+            let totalDays = 0;
+            for (let j = 1; j < sortedIssues.length; j++) {
+              const currentClose = new Date(sortedIssues[j].closeDate);
+              const previousClose = new Date(sortedIssues[j - 1].closeDate);
+              totalDays += Math.abs((currentClose - previousClose) / (1000 * 60 * 60 * 24));
+            }
+            const avgPeriodDays = Math.round(totalDays / totalPeriods);
+            
+            startDate = new Date(closeDate);
+            startDate.setDate(startDate.getDate() - avgPeriodDays);
+          } else {
+            // Single issue, assume 30 days
+            startDate = new Date(closeDate);
+            startDate.setDate(startDate.getDate() - 30);
+          }
+        } else {
+          startDate = new Date(sortedIssues[i - 1].closeDate);
+          startDate.setDate(startDate.getDate() + 1); // Day after previous issue's close
         }
-      });
+
+        const isCurrentPeriod = now >= startDate && now <= closeDate;
+
+        // Check if today falls within this issue's period
+        if (isCurrentPeriod) {
+          currentIssue = issue.name;
+          break; // Found the current issue, stop searching
+        }
+      }
+
+      // If we found a current issue in this schedule, stop searching other schedules
+      if (currentIssue) return;
     });
 
-    // Fallback to calendar-based current issue if no schedule data found
+    // Fallback logic: if no current period found, find the closest upcoming issue
+    if (!currentIssue) {
+      let closestUpcomingIssue = null;
+      let shortestTimeToStart = Infinity;
+
+      schedules.forEach(schedule => {
+        if (!schedule.issues || schedule.issues.length === 0) return;
+        
+        const sortedIssues = [...schedule.issues].sort((a, b) => a.sortOrder - b.sortOrder);
+        
+        for (let i = 0; i < sortedIssues.length; i++) {
+          const issue = sortedIssues[i];
+          const closeDate = new Date(issue.closeDate);
+          
+          let startDate;
+          if (i === 0) {
+            if (sortedIssues.length > 1) {
+              const nextClose = new Date(sortedIssues[1].closeDate);
+              const periodDays = Math.abs((nextClose - closeDate) / (1000 * 60 * 60 * 24));
+              startDate = new Date(closeDate);
+              startDate.setDate(startDate.getDate() - periodDays);
+            } else {
+              startDate = new Date(closeDate);
+              startDate.setDate(startDate.getDate() - 30);
+            }
+          } else {
+            startDate = new Date(sortedIssues[i - 1].closeDate);
+            startDate.setDate(startDate.getDate() + 1);
+          }
+          
+          // Find closest upcoming issue
+          if (startDate > now) {
+            const timeToStart = startDate - now;
+            if (timeToStart < shortestTimeToStart) {
+              shortestTimeToStart = timeToStart;
+              closestUpcomingIssue = issue.name;
+            }
+          }
+        }
+      });
+
+      if (closestUpcomingIssue) {
+        currentIssue = closestUpcomingIssue;
+      }
+    }
+
+    // Final fallback to calendar-based current issue
     if (!currentIssue) {
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -127,7 +208,6 @@ const Bookings = () => {
 
       clearTimeout(timeout);
     } catch (error) {
-      console.error('Error loading data:', error);
       toast.error('Error loading data');
     } finally {
       setLoading(false);
@@ -280,9 +360,6 @@ const Bookings = () => {
         const selectedStartIssueTrimmed = selectedStartIssue.toString().trim();
         return entryStartIssue === selectedStartIssueTrimmed;
       });
-      if (debugEnabled) {
-        console.log(`Start issue filter: ${beforeCount} -> ${filtered.length} entries`);
-      }
     }
 
     // Apply finish issue filter - ensure both values are strings and trimmed
@@ -902,69 +979,3 @@ const Bookings = () => {
 };
 
 export default Bookings;
-
-// Debug function for testing issue filtering (accessible in browser console as window.debugBookingFilters)
-if (typeof window !== 'undefined') {
-  window.debugBookingFilters = () => {
-    console.log('=== Booking Filters Debug ===');
-    
-    // Get Redux state
-    const state = window.__REDUX_DEVTOOLS_EXTENSION__ ? 
-      window.__REDUX_DEVTOOLS_EXTENSION__.getState?.() || {} : {};
-    
-    const bookings = state.booking?.bookings || [];
-    
-    console.log('Total bookings:', bookings.length);
-    
-    // Flatten bookings like the component does
-    const flattened = [];
-    const startIssues = new Set();
-    const finishIssues = new Set();
-    
-    bookings.forEach(booking => {
-      booking.magazineEntries?.forEach(entry => {
-        flattened.push({
-          id: `${booking._id}_${entry._id || entry.magazine}`,
-          startIssue: entry.startIssue,
-          finishIssue: entry.finishIssue,
-          isOngoing: entry.isOngoing,
-          customerName: booking.customer?.name
-        });
-        
-        if (entry.startIssue && entry.startIssue.toString().trim()) {
-          startIssues.add(entry.startIssue.toString().trim());
-        }
-        if (entry.finishIssue && !entry.isOngoing && entry.finishIssue.toString().trim()) {
-          finishIssues.add(entry.finishIssue.toString().trim());
-        }
-      });
-    });
-    
-    console.log('Flattened entries:', flattened.length);
-    console.log('Unique start issues:', Array.from(startIssues));
-    console.log('Unique finish issues:', Array.from(finishIssues));
-    console.log('Sample entries:', flattened.slice(0, 5));
-    
-    // Test filtering
-    const testStartIssue = Array.from(startIssues)[0];
-    if (testStartIssue) {
-      const filtered = flattened.filter(entry => {
-        const entryStartIssue = entry.startIssue ? entry.startIssue.toString().trim() : '';
-        return entryStartIssue === testStartIssue;
-      });
-      console.log(`Test start issue filter "${testStartIssue}":`, filtered.length, 'results');
-    }
-    
-    const testFinishIssue = Array.from(finishIssues)[0];
-    if (testFinishIssue) {
-      const filtered = flattened.filter(entry => {
-        const entryFinishIssue = entry.finishIssue ? entry.finishIssue.toString().trim() : '';
-        return entryFinishIssue === testFinishIssue;
-      });
-      console.log(`Test finish issue filter "${testFinishIssue}":`, filtered.length, 'results');
-    }
-    
-    console.log('To enable detailed filtering debug, run: localStorage.setItem("debug", "bookings")');
-    console.log('=== End Debug ===');
-  };
-} 
